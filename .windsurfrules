@@ -1,0 +1,6 @@
+Deploy directly using the Netlify CLI
+When correcting some small bug, do only edit part of the code only that is needed
+When making a feature, sure to preserve all features. Do not overwrite everything.
+When fixing a bug, correct the bug but make sure to preserve all features. Do not overwrite everything.
+Do not deploy to Netlify if not requested
+Always try first to apply a simpler approach to fix issues by focusing only on the specific problem
