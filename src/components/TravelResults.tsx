@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronUp, Map, MapPin, Share2, Loader2, Plus, Info, Ticket, X, Save, ExternalLink, Printer } from 'lucide-react';
-import { TravelSuggestions, TravelSuggestion } from '@/types';
+import { ChevronDown, ChevronUp, Map, MapPin, Loader2, Plus, Info, ExternalLink } from 'lucide-react';
+import { TravelSuggestions } from '@/types';
 import { LocationPhotos } from './LocationPhotos';
 import { DynamicMap } from './DynamicMap';
 import { ArrangeItems } from './ui/ArrangeItems';
 import { Button } from './ui/button';
-import { PreciseItinerary } from './PreciseItinerary';
 import { AddDate } from './ui/AddDate';
 import { format, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -15,31 +14,19 @@ import { generateMoreAttractions, generateMoreHiddenGems, generateMoreActivities
 import { analytics } from '@/lib/analytics';
 import { formatTravelPlanForSharing, shareContent } from "@/lib/shareUtils";
 import { NavigationBar } from "./NavigationBar";
-import { ActivityIdeasInterests } from '@/components/ui/ActivityIdeasInterests';
-import { SpecificPracticalAdvice } from './ui/SpecificPracticalAdvice';
-import { RestaurantIdeas } from './ui/RestaurantIdeas';
-import { PrintToPDF } from './ui/PrintToPDF';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { saveTrip } from '@/lib/tripService';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkout } from '@/components/ui/Checkout';
+import { PlaceCard } from './ui/PlaceCard';
+import { BottomNavBar } from './ui/BottomNavBar';
 
 interface TravelResultsProps {
   suggestions: TravelSuggestions;
   language: 'en' | 'fr';
   duration: number;
   destination: string;
-  interests: string[];
-  onReset: () => void;
+  interests?: string[];
+  onReset?: () => void;
 }
 
 interface SectionState {
@@ -97,6 +84,9 @@ function TravelResults({
     events: true,
     accommodation: true
   });
+  
+  // Add view mode state
+  const [viewMode, setViewMode] = useState<'itinerary' | 'places'>('itinerary');
   const [additionalAttractions, setAdditionalAttractions] = useState<any[]>([]);
   const [additionalGems, setAdditionalGems] = useState<any[]>([]);
   const [additionalActivities, setAdditionalActivities] = useState<any[]>([]);
@@ -108,161 +98,52 @@ function TravelResults({
   const [itineraryActivities, setItineraryActivities] = useState<{ [key: number]: string[] }>({});
   const resultsTitleRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [flickrPhotos, setFlickrPhotos] = useState<string[]>([]);
-  const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
-  const [isMapExpanded, setIsMapExpanded] = useState(false);
-  const [savedAnswers, setSavedAnswers] = useState<string[]>([]);
+  const [isMapExpanded, setIsMapExpanded] = useState(() => {
+    // Check if we're on desktop using window width
+    return window.innerWidth >= 1024; // 1024px is the 'lg' breakpoint in Tailwind
+  });
+  const [isFullscreenMap, setIsFullscreenMap] = useState(false);
+  const [itineraryMapItems, setItineraryMapItems] = useState<any[]>([]);
   const [suggestionsState, setSuggestionsState] = useState<TravelSuggestions>(suggestions);
-  const [startDate, setStartDate] = useState<Date>();
-  const [showInstructions, setShowInstructions] = useState(true);
-  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [tripTitle, setTripTitle] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [autoLoadPhotos, setAutoLoadPhotos] = useState(false);
-
-  const renderTextWithLinks = (text: string) => {
-    // Handle Markdown-style links [text](url)
-    const markdownRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const boldRegex = /\*\*([^*]+)\*\*/g;
-    const bulletRegex = /^\* (.+)$/gm;
-    
-    // First replace Markdown links with clickable links
-    let processedText = text.replace(markdownRegex, (_, linkText, url) => {
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline">${linkText}</a>`;
-    });
-    
-    // Then handle any remaining plain URLs
-    processedText = processedText.replace(urlRegex, (url) => {
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline">${url}</a>`;
-    });
-
-    // Handle bold text
-    processedText = processedText.replace(boldRegex, '<strong>$1</strong>');
-
-    // Handle bullet points
-    processedText = processedText.replace(bulletRegex, '<div class="flex gap-2 items-start"><span class="mt-1.5">•</span><span>$1</span></div>');
-
-    // Handle line breaks
-    processedText = processedText.replace(/\n/g, '<br />');
-
-    return (
-      <div 
-        className="text-sm whitespace-pre-wrap space-y-2"
-        dangerouslySetInnerHTML={{ __html: processedText }}
-      />
-    );
-  };
+  const [startDate, setStartDate] = useState<Date | null>(new Date());
 
   // Ensure we have valid suggestions before accessing properties
   if (!suggestionsState || !suggestionsState.itinerary) {
     return null;
   }
 
-  const fetchFlickrPhotos = async (searchTerm: string) => {
-    // If no search term is provided, return empty array
-    if (!searchTerm || searchTerm.trim() === '') {
-      return [];
-    }
-    
-    const API_KEY = '4306b70370312d7ccde3304184179b2b';
-    // Add CORS proxy to avoid CORS issues
-    const url = `https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=${API_KEY}&text=${encodeURIComponent(searchTerm)}&sort=relevance&per_page=5&format=json&nojsoncallback=1&safe_search=1&content_type=1&media=photos`;
-
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-        mode: 'cors',
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.stat !== 'ok') {
-        throw new Error(data.message || 'Failed to fetch photos');
-      }
-
-      if (!data.photos?.photo || data.photos.photo.length === 0) {
-        console.log('No photos found for search term:', searchTerm);
-        return [];
-      }
-
-      const photoUrls = data.photos.photo
-        .filter((photo: any) => photo.server && photo.id && photo.secret)
-        .map((photo: any) => 
-          `https://live.staticflickr.com/${photo.server}/${photo.id}_${photo.secret}_b.jpg`
-        );
-      
-      return photoUrls;
-    } catch (error) {
-      console.error('Error fetching Flickr photos:', error);
-      // Return empty array instead of throwing error to prevent UI disruption
-      return [];
-    }
-  };
-
   useEffect(() => {
     analytics.trackViewTravelResults(destination);
     // Initialize itinerary activities from suggestions
     const initialActivities = (suggestionsState.itinerary || []).reduce((acc, day) => {
-      acc[day.day] = day.activities;
+      // Convert the new activity structure to formatted strings for backward compatibility
+      const formattedActivities = day.activities.map(activity => {
+        return `${activity.activity} at ${activity.place}` +
+               (activity.nearbyLandmarks && activity.nearbyLandmarks.length > 0 ? 
+                 ` (Near: ${activity.nearbyLandmarks.join(', ')})` : '') +
+               (activity.travelTime ? ` - ${activity.travelTime} from previous location` : '');
+      });
+      acc[day.day] = formattedActivities;
       return acc;
     }, {} as { [key: number]: string[] });
     setItineraryActivities(initialActivities);
   }, [destination, suggestionsState]);
 
   useEffect(() => {
-    const loadFlickrPhotos = async () => {
-      // Only attempt to load photos if we have a valid destination
-      if (!destination || destination.trim() === '') {
-        return;
-      }
-      
-      setIsLoadingPhotos(true);
-      try {
-        // Add a small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const photos = await fetchFlickrPhotos(destination);
-        if (photos && photos.length > 0) {
-          setFlickrPhotos(photos);
-        } else {
-          // If no photos found for the exact destination, try a more generic search
-          const fallbackPhotos = await fetchFlickrPhotos(destination + ' landmark');
-          setFlickrPhotos(fallbackPhotos);
-        }
-      } catch (error) {
-        console.error('Error in loadFlickrPhotos:', error);
-      } finally {
-        setIsLoadingPhotos(false);
-      }
-    };
-
-    if (destination) {
-      loadFlickrPhotos();
-    }
-  }, [destination]);
-
-  useEffect(() => {
     if (suggestions) {
       setSuggestionsState(suggestions);
-      
-      // Set autoLoadPhotos to true after a short delay to ensure the component is fully rendered
-      setTimeout(() => {
-        setAutoLoadPhotos(true);
-      }, 2000);
     }
   }, [suggestions]);
 
   const handleShareClick = async () => {
     if (!user || !isSubscribed) {
-      setIsCheckoutOpen(true);
+      toast({
+        title: language === 'en' ? 'Login Required' : 'Connexion Requise',
+        description: language === 'en'
+          ? 'Please login to share your trip'
+          : 'Veuillez vous connecter pour partager votre voyage',
+        variant: "destructive",
+      });
       return;
     }
 
@@ -453,6 +334,163 @@ function TravelResults({
     );
   };
 
+  // Function to extract activity information from a formatted activity string or activity object
+  const extractActivityInfo = (activity: string | any) => {
+    // If activity is already an object with the required properties, use it directly
+    if (typeof activity !== 'string' && activity.activity && activity.place) {
+      return {
+        title: activity.place,
+        description: activity.description || `${activity.activity} at ${activity.place}`,
+        destination: activity.place,
+        nearbyLandmarks: activity.nearbyLandmarks || [],
+        travelTime: activity.travelTime,
+        bookingInfo: activity.bookingInfo
+      };
+    }
+    
+    // Otherwise, treat it as a string
+    let activityText = typeof activity === 'string' ? activity : `${activity.activity} at ${activity.place}`;
+    
+    // Remove any HTML tags
+    activityText = activityText.replace(/<\/?[^>]+(>|$)/g, "");
+    
+    let title = '';
+    let description = '';
+    let destination = '';
+    let nearbyLandmarks: string[] = [];
+    let travelTime: string | null = null;
+    let bookingInfo: string | null = null;
+    
+    // Extract place name from the activity text
+    // Try to extract time and place information
+    const timeMatch = activityText.match(/(\w+):\s*(\d+[h:]\d+)\s*-\s*(.*)/);
+    if (timeMatch && timeMatch[3]) {
+      // If we have a time format, use the part after the time as title
+      title = timeMatch[3].trim();
+      description = activityText;
+    } else {
+      // Otherwise try to split by "at" to get the activity and place
+      const atMatch = activityText.match(/(.*) at (.*?)(?:\s+\(Near:|$|\s+-)/);
+      if (atMatch && atMatch[1] && atMatch[2]) {
+        title = atMatch[1].trim();
+        destination = atMatch[2].trim();
+        description = activityText;
+      } else {
+        // Fallback to the full text
+        title = activityText;
+        description = '';
+      }
+    }
+    
+    // Extract nearby landmarks if present
+    const landmarksMatch = activityText.match(/Near: (.*?)(?:\)|$)/);
+    if (landmarksMatch && landmarksMatch[1]) {
+      nearbyLandmarks = landmarksMatch[1].split(',').map(l => l.trim());
+    }
+    
+    // Extract travel time if present
+    const travelTimeMatch = activityText.match(/- (.*? from previous location)/);
+    if (travelTimeMatch && travelTimeMatch[1]) {
+      travelTime = travelTimeMatch[1];
+    }
+    
+    // Extract booking info if present
+    const bookingMatch = activityText.match(/Book at: (.*?)(?:$|\s+-)/);
+    if (bookingMatch && bookingMatch[1]) {
+      bookingInfo = bookingMatch[1].trim();
+    }
+    
+    return {
+      title,
+      description,
+      destination,
+      nearbyLandmarks,
+      travelTime,
+      bookingInfo
+    };
+  };
+
+  // Extract coordinates from activity title by looking up in attractions and hidden gems
+  const findCoordinatesForActivity = (activityTitle: string) => {
+    // First check in mustSeeAttractions
+    const attraction = suggestionsState.mustSeeAttractions.find(
+      item => item.title.toLowerCase().includes(activityTitle.toLowerCase()) || 
+             activityTitle.toLowerCase().includes(item.title.toLowerCase())
+    );
+    if (attraction?.coordinates) return attraction.coordinates;
+
+    // Then check in hiddenGems
+    const gem = suggestionsState.hiddenGems.find(
+      item => item.title.toLowerCase().includes(activityTitle.toLowerCase()) || 
+             activityTitle.toLowerCase().includes(item.title.toLowerCase())
+    );
+    if (gem?.coordinates) return gem.coordinates;
+
+    // Then check in events
+    const event = suggestionsState.events.find(
+      item => item.title.toLowerCase().includes(activityTitle.toLowerCase()) || 
+             activityTitle.toLowerCase().includes(item.title.toLowerCase())
+    );
+    if (event?.coordinates) return event.coordinates;
+
+    // If no match found, return destination coordinates as fallback
+    return suggestionsState.destination.coordinates;
+  };
+
+  // Prepare itinerary items for map display
+  const prepareItineraryMapItems = () => {
+    const items: any[] = [];
+    let globalIndex = 0;
+    let continuousIndex = 1; // Start from 1 for continuous numbering
+
+    // Debug: Log the itinerary activities
+    console.log('Itinerary activities:', itineraryActivities);
+    
+    // Sort the days numerically to ensure proper order
+    const sortedDays = Object.keys(itineraryActivities)
+      .map(day => parseInt(day))
+      .filter(day => !isNaN(day))
+      .sort((a, b) => a - b);
+    
+    // Process each day in order
+    sortedDays.forEach(day => {
+      const dayActivities = itineraryActivities[day] || [];
+      
+      // Add each activity for this day
+      dayActivities.forEach((activity, localIndex) => {
+        const activityInfo = extractActivityInfo(activity);
+        const coordinates = findCoordinatesForActivity(activityInfo.title);
+        
+        items.push({
+          day: day,
+          index: localIndex,
+          displayIndex: continuousIndex++, // Use a simple continuous counter starting from 1
+          title: activityInfo.title,
+          description: activityInfo.description,
+          location: activityInfo.destination,
+          coordinates
+        });
+        
+        globalIndex++;
+      });
+    });
+
+    console.log('Prepared map items:', items);
+    setItineraryMapItems(items);
+  };
+
+  const handleMapButtonClick = () => {
+    if (!isMapExpanded) {
+      // If map is not expanded, expand it normally
+      prepareItineraryMapItems(); // Prepare map items before showing the map
+      setIsMapExpanded(true);
+    } else {
+      // If map is already expanded, toggle fullscreen mode
+      prepareItineraryMapItems();
+      setIsFullscreenMap(!isFullscreenMap);
+    }
+  };
+
   const ResultSection = ({ id, title, items, type }: { id: string; title: string; items: any[]; type: keyof SectionState }) => {
     if (!items || !Array.isArray(items)) {
       return null;
@@ -475,99 +513,119 @@ function TravelResults({
     }
 
     return (
-      <section id={id} className={id === 'itinerary' ? "rounded-lg shadow-sm p-3 md:p-4 mb-6" : "bg-white rounded-lg shadow-sm p-3 md:p-4 mb-6"}>
+      <section id={id} className={id === 'itinerary' ? "rounded-lg shadow-sm p-3 lg:p-4 mb-6 w-full" : "bg-white rounded-lg shadow-sm p-3 lg:p-4 mb-6 w-full"}>
         <div
-          className="flex justify-between items-center cursor-pointer"
+          className="flex justify-between items-center cursor-pointer w-full"
           style={{ backgroundColor: '#003049', padding: '0.25rem 0.5rem', borderRadius: '0.375rem', marginBottom: '0.75rem' }}
           onClick={() => toggleSection(type)}
         >
-          <h2 className="text-lg md:text-xl font-semibold text-white">{title}</h2>
+          <h2 className="text-lg lg:text-xl font-semibold text-white">{title}</h2>
           {expandedSections[type] ? <ChevronUp className="text-white" /> : <ChevronDown className="text-white" />}
         </div>
         {expandedSections[type] && (
-          <div className="mt-3 space-y-3">
+          <div className="mt-3 space-y-3 w-full">
             {type === 'itinerary' && (
               <>
-                {showInstructions && (
-                  <div className="text-sm text-black border border-black rounded-md p-3 mb-4 relative">
-                    <button 
-                      onClick={() => setShowInstructions(false)}
-                      className="absolute top-2 right-2 text-gray-600 hover:text-black transition-colors"
-                      aria-label="Close instructions"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                    {language === 'fr' 
-                      ? 'Ceci est un itinéraire de base. Réoranisez les étapes d\'une journée en cliquant et modifiant leurs positions.'
-                      : 'This is a basic itinerary. Re-arrange the steps of one day by clicking and dragging them.'}
-                  </div>
-                )}
-                <div className="flex justify-center mb-4">
-                  <PreciseItinerary
-                    suggestions={suggestionsState}
-                    language={language}
-                    onNewItinerary={(newItinerary) => {
-                      const newActivities: Record<number, string[]> = {};
-                      newItinerary.forEach(day => {
-                        newActivities[day.day] = day.activities;
-                      });
-                      setItineraryActivities(newActivities);
-                    }}
-                    currentItinerary={itineraryActivities}
-                  />
+                <div className="text-sm text-black border border-black rounded-md p-3 mb-4 relative">
+                  {language === 'fr' 
+                    ? 'Ceci est un itinéraire de base. Réoranisez les étapes d\'une journée en cliquant et modifiant leurs positions.'
+                    : 'This is a basic itinerary. Re-arrange the steps of one day by clicking and dragging them.'}
                 </div>
-                <div className="bg-[#FDF0D5] rounded-lg p-3 md:p-4 space-y-8">
-                  {items.map((day: { day: number; activities: string[] }) => (
-                    <div key={day.day} className="border-b pb-6 last:border-b-0">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4">
-                        <div className="flex-shrink-0">
-                          {day.day === 1 ? (
-                            <AddDate
-                              language={language}
-                              selectedDate={startDate}
-                              onDateSelected={(date) => setStartDate(date)}
-                            />
-                          ) : (
-                            <div className="font-medium">
-                              {startDate ? (
-                                format(addDays(startDate, day.day - 1), 'PPP', { 
-                                  locale: language === 'fr' ? fr : undefined 
-                                })
-                              ) : (
-                                language === 'en' ? `Day ${day.day}` : `Jour ${day.day}`
-                              )}
-                            </div>
-                          )}
+                <div className="p-3 lg:p-4 space-y-8">
+                  {suggestionsState.itinerary.map((day, dayIdx) => {
+                    // Calculate the starting index for this day based on previous days
+                    const startingIndex = suggestionsState.itinerary
+                      .slice(0, dayIdx)
+                      .reduce((sum, prevDay) => sum + (itineraryActivities[prevDay.day]?.length || 0), 0);
+                    
+                    return (
+                      <div key={day.day} id={`day-${day.day}`} className="border-b pb-6 last:border-b-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4">
+                          <div className="flex-shrink-0">
+                            {day.day === 1 ? (
+                              <AddDate
+                                language={language}
+                                selectedDate={startDate}
+                                onDateSelected={(date) => setStartDate(date)}
+                              />
+                            ) : (
+                              <div className="font-medium">
+                                {startDate ? (
+                                  format(addDays(startDate, day.day - 1), 'PPP', { 
+                                    locale: language === 'fr' ? fr : undefined 
+                                  })
+                                ) : (
+                                  language === 'en' ? `Day ${day.day}` : `Jour ${day.day}`
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
+                        <ArrangeItems
+                          items={itineraryActivities[day.day] || []}
+                          startingIndex={startingIndex}
+                          renderItem={(activity: string) => {
+                            const activityInfo = extractActivityInfo(activity);
+                            
+                            // Find the matching activity in the itinerary data from OpenAI
+                            const matchingItineraryDay = suggestionsState.itinerary.find(d => d.day === day.day);
+                            const matchingActivity = matchingItineraryDay?.activities.find(a => 
+                              a.activity === activityInfo.title || 
+                              a.place === activityInfo.destination ||
+                              (a.activity && activityInfo.title.includes(a.activity)) ||
+                              (a.place && activityInfo.title.includes(a.place))
+                            );
+                            
+                            // Process booking info
+                            const bookingInfo = matchingActivity?.bookingInfo || activityInfo.bookingInfo || null;
+                            const isUrl = bookingInfo && (
+                              bookingInfo.startsWith('http://') || 
+                              bookingInfo.startsWith('https://') || 
+                              bookingInfo.startsWith('www.')
+                            );
+                            
+                            return (
+                              <div className="w-full">
+                                <p className="text-black text-base flex-1 mb-2 font-bold" style={{ marginLeft: '25px' }}>
+                                  {matchingActivity?.activity || activityInfo.title}
+                                </p>
+                                <PlaceCard 
+                                  title={matchingActivity?.activity || activityInfo.title}
+                                  description={matchingActivity?.description || activityInfo.description}
+                                  location={matchingActivity?.place || activityInfo.destination}
+                                  language={language}
+                                  nearbyLandmarks={matchingActivity?.nearbyLandmarks || activityInfo.nearbyLandmarks}
+                                  travelTime={matchingActivity?.travelTime || activityInfo.travelTime}
+                                  bookingUrl={isUrl ? bookingInfo : null}
+                                  bookingInfo={!isUrl ? bookingInfo : null}
+                                  mustSeeAttractions={suggestionsState.mustSeeAttractions}
+                                  hiddenGems={suggestionsState.hiddenGems}
+                                  compact={true}
+                                />
+                              </div>
+                            );
+                          }}
+                          onReorder={(sourceIndex, targetIndex) => {
+                            setItineraryActivities(prev => {
+                              const newActivities = { ...prev };
+                              const dayActivities = [...prev[day.day]];
+                              
+                              // Swap activities
+                              const temp = dayActivities[sourceIndex];
+                              dayActivities[sourceIndex] = dayActivities[targetIndex];
+                              dayActivities[targetIndex] = temp;
+                              
+                              newActivities[day.day] = dayActivities;
+                              return newActivities;
+                            });
+                          }}
+                          onDelete={(index) => handleDeleteActivity(day.day, index)}
+                          dayIndex={day.day}
+                          onCrossDayMove={handleCrossDayMove}
+                        />
                       </div>
-                      <ArrangeItems
-                        items={itineraryActivities[day.day] || []}
-                        renderItem={(activity: string) => (
-                          <p 
-                            className="text-black text-base flex-1"
-                            dangerouslySetInnerHTML={{ __html: activity }}
-                          />
-                        )}
-                        onReorder={(sourceIndex, targetIndex) => {
-                          setItineraryActivities(prev => {
-                            const newActivities = { ...prev };
-                            const dayActivities = [...prev[day.day]];
-                            
-                            // Swap activities
-                            const temp = dayActivities[sourceIndex];
-                            dayActivities[sourceIndex] = dayActivities[targetIndex];
-                            dayActivities[targetIndex] = temp;
-                            
-                            newActivities[day.day] = dayActivities;
-                            return newActivities;
-                          });
-                        }}
-                        onDelete={(index) => handleDeleteActivity(day.day, index)}
-                        dayIndex={day.day}
-                        onCrossDayMove={handleCrossDayMove}
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -609,9 +667,6 @@ function TravelResults({
                     <div key={`${item.title}-${item.location || ''}-${item.coordinates?.lat || ''}`} className="border-b pb-4 last:border-b-0">
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold flex items-center">
-                          <span className="inline-flex items-center border-inherit justify-center w-6 h-6 rounded-full bg-[#FDF0D5] border border-black-500 text-sm mr-2">
-                            {type === 'restaurants' ? 'R' : type === 'accommodation' ? 'A' : allItems.indexOf(item) + 1}
-                          </span>
                           {item.title}
                         </h3>
                       </div>
@@ -655,7 +710,6 @@ function TravelResults({
                               location={item.title}
                               coordinates={item.coordinates}
                               language={language}
-                              autoLoad={autoLoadPhotos}
                             />
                           </div>
                           <div className="flex justify-center gap-4 px-4 pt-4">
@@ -668,15 +722,17 @@ function TravelResults({
                               <Info className="w-4 h-4" />
                               <span className="hidden sm:inline ml-2">{language === 'en' ? 'More Info' : 'Plus d\'infos'}</span>
                             </a>
-                            <a 
-                              href={type === 'restaurants' ? "https://lk.gt/aGLM6" : "https://tiqets.tp.st/p7Cvr9BI"}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center px-4 py-1 bg-background border border-primary/20 hover:border-primary/50 text-primary rounded-md transition-colors text-[14px] sm:text-base"
-                            >
-                              <Ticket className="w-4 h-4" />
-                              <span className="ml-2">{language === 'en' ? 'Book' : 'Réserver'}</span>
-                            </a>
+                            {(type === 'attractions' || type === 'gems') && (
+                              <a
+                                href={`https://www.tiqets.com/en/search/?q=${encodeURIComponent(item.title)}+${encodeURIComponent(suggestionsState.destination.name)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center px-4 py-1 bg-[#003049] text-white rounded-md transition-colors text-[14px] sm:text-base"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                                <span className="hidden sm:inline ml-2">{language === 'en' ? 'Book Tickets' : 'Réserver'}</span>
+                              </a>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -741,377 +797,185 @@ function TravelResults({
     );
   };
 
-  const handleAddRestaurant = (restaurantName: string) => {
-    const newRestaurant: TravelSuggestion = {
-      title: restaurantName,
-      description: '',
-      location: destination,
-      coordinates: suggestionsState.destination.coordinates
-    };
-    
-    setSuggestionsState(prev => ({
-      ...prev,
-      restaurants: [...prev.restaurants, newRestaurant]
-    }));
-    
-    toast({
-      title: language === 'fr' ? 'Restaurant ajouté !' : 'Restaurant added!',
-      description: language === 'fr' ? 'Le restaurant a été ajouté à vos suggestions.' : 'The restaurant has been added to your suggestions.',
-    });
-  };
-
   const handleSaveTrip = async () => {
     if (!user) {
       toast({
         title: language === 'en' ? 'Login Required' : 'Connexion Requise',
-        description: language === 'en' 
-          ? 'Please login to save your trip' 
+        description: language === 'en'
+          ? 'Please login to save your trip'
           : 'Veuillez vous connecter pour sauvegarder votre voyage',
         variant: "destructive",
       });
       return;
     }
 
-    if (!tripTitle.trim()) {
-      toast({
-        title: language === 'en' ? 'Title Required' : 'Titre Requis',
-        description: language === 'en'
-          ? 'Please enter a title for your trip'
-          : 'Veuillez entrer un titre pour votre voyage',
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsSaving(true);
-
     try {
       // Update travel suggestions with the modified itinerary
       const updatedSuggestions = {
         ...suggestionsState,
-        language: language,
-        itinerary: Object.keys(itineraryActivities).map(day => ({
-          day: Number(day),
-          activities: itineraryActivities[Number(day)]
+        itinerary: suggestionsState.itinerary.map(day => ({
+          ...day,
+          activities: itineraryActivities[day.day] || day.activities
         }))
       };
 
-      // Save trip to database
       await saveTrip({
-        user_id: user.id,
-        trip_title: tripTitle,
-        destination: destination,
-        data: updatedSuggestions
+        title: destination,
+        destination,
+        duration,
+        language,
+        suggestions: updatedSuggestions,
+        userId: user.id
       });
 
       toast({
         title: language === 'en' ? 'Trip Saved!' : 'Voyage Sauvegardé !',
         description: language === 'en'
-          ? 'Find it in "My Trips"'
-          : 'Retrouvez le dans "Mes Voyages"',
+          ? 'Your trip has been saved successfully.'
+          : 'Votre voyage a été sauvegardé avec succès.',
       });
 
-      setIsSaveDialogOpen(false);
+      analytics.trackSaveTrip({
+        destination,
+        duration,
+        language,
+      });
     } catch (error) {
       console.error('Error saving trip:', error);
       toast({
-        title: language === 'en' ? 'Error' : 'Erreur',
+        title: language === 'en' ? 'Save Failed' : 'Échec de la Sauvegarde',
         description: language === 'en'
           ? 'Failed to save your trip. Please try again.'
           : 'Échec de la sauvegarde de votre voyage. Veuillez réessayer.',
         variant: "destructive",
       });
-    } finally {
-      setIsSaving(false);
     }
   };
 
   const handleReset = () => {
-    if (!user || !isSubscribed) {
-      setIsCheckoutOpen(true);
-    } else {
+    if (onReset) {
       onReset();
     }
   };
 
-  const CustomPrintToPDF = () => {
-    if (!user || !isSubscribed) {
-      return (
-        <Button
-          onClick={() => setIsCheckoutOpen(true)}
-          variant="outline"
-          size="sm"
-          className="flex-1 sm:flex-none gap-2"
-        >
-          <Printer className="h-4 w-4" />
-          {language === 'fr' ? 'Guide PDF' : 'PDF Guide'}
-        </Button>
-      );
-    }
-    
-    return <PrintToPDF contentRef={contentRef} language={language} destination={destination} />;
-  };
-
   return (
-    <div ref={contentRef} className="relative min-h-screen bg-white">
-      <div ref={resultsTitleRef} className="bg-[#5f9585] px-4 py-3 rounded-lg mb-4">
-        <h2 className="text-xl md:text-2xl font-bold mb-3">
+    <div ref={contentRef} className="relative min-h-screen bg-white w-full">
+      <div ref={resultsTitleRef} className="px-0 py-3 rounded-lg mb-4 w-full">
+        <h2 className="text-xl lg:text-2xl font-bold mb-3">
           {language === 'en'
             ? `Your ${duration}-day trip to ${destination}`
             : `Votre voyage de ${duration} jours à ${destination}`}
         </h2>
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Button
-              onClick={handleShareClick}
-              variant="outline"
-              size="sm"
-              className="flex-1 sm:flex-none gap-2"
-            >
-              <Share2 className="h-4 w-4" />
-              {language === 'fr' ? 'Whatsapp' : 'Whatsapp'}
-            </Button>
-            <CustomPrintToPDF />
-          </div>
-          <div className="flex gap-2 w-full sm:w-auto">
-            {(!user || !isSubscribed) && (
-              <Button
-                onClick={() => setIsCheckoutOpen(true)}
-                variant="outline"
-                size="sm"
-                className="flex-1 sm:flex-none gap-2"
-              >
-                <ExternalLink className="h-4 w-4" />
-                {language === 'fr' ? 'Partager ce voyage' : 'Share this trip'}
-              </Button>
-            )}
-            <Button
-              onClick={handleReset}
-              variant="outline"
-              size="sm"
-              className="flex-1 sm:flex-none gap-2"
-            >
-              <X className="h-4 w-4" />
-              {language === 'fr' ? 'Recommencer' : 'Start Over'}
-            </Button>
-          </div>
-          {user && (
-            <Button
-              onClick={() => {
-                setTripTitle(destination);
-                setIsSaveDialogOpen(true);
-              }}
-              variant="outline"
-              size="sm"
-              className="w-full sm:w-auto gap-2"
-            >
-              <Save className="h-4 w-4" />
-              {language === 'fr' ? 'Sauvegarder & partager ce voyage' : 'Save & share this trip'}
-            </Button>
-          )}
-        </div>
       </div>
 
-      <NavigationBar language={language} suggestions={suggestionsState} />
+      {/* Itinerary and Places buttons */}
+      <div className="flex gap-4 mb-3 w-full">
+        <span
+          className={`text-[#003049] ${viewMode === 'itinerary' ? 'underline font-bold' : ''}`}
+          onClick={() => setViewMode('itinerary')}
+          style={{ cursor: 'pointer' }}
+          onMouseEnter={(e) => e.currentTarget.classList.add('underline')}
+          onMouseLeave={(e) => e.currentTarget.classList.remove('underline')}
+        >
+          {language === 'en' ? 'Itinerary' : 'Itinéraire'}
+        </span>
+        <span
+          className={`text-[#003049] ${viewMode === 'places' ? 'underline font-bold' : ''}`}
+          onClick={() => setViewMode('places')}
+          style={{ cursor: 'pointer' }}
+          onMouseEnter={(e) => e.currentTarget.classList.add('underline')}
+          onMouseLeave={(e) => e.currentTarget.classList.remove('underline')}
+        >
+          {language === 'en' ? 'Places' : 'Lieux'}
+        </span>
+      </div>
 
-      {suggestionsState.destination.coordinates && (
-        <div className="space-y-4 mt-4">
-          {flickrPhotos.length > 0 && (
-            <div className="relative group">
-              <div className="overflow-x-auto pb-4 no-scrollbar md:custom-scrollbar">
-                <div className="flex gap-4 min-w-max px-4">
-                  {flickrPhotos.map((photo, index) => (
-                    <img
-                      key={index}
-                      src={photo}
-                      alt={`${destination} photo ${index + 1}`}
-                      className="w-64 h-48 object-cover rounded-lg shadow-md"
-                      loading="lazy"
-                    />
-                  ))}
-                </div>
-              </div>
-              {isLoadingPhotos && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/50">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span className="text-sm">
-                      {language === 'en' ? 'Loading photos...' : 'Chargement des photos...'}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          
-          <div className="flex justify-center">
-            <button
-              onClick={() => setIsMapExpanded(!isMapExpanded)}
-              className="px-6 py-2 bg-white text-[#d99a08] border border-[#d99a08] rounded-lg hover:bg-[#d99a08] hover:text-white transition-colors duration-200 flex items-center gap-2 shadow-sm"
-            >
-              <Map className="w-4 h-4" />
-              {isMapExpanded 
-                ? (language === 'en' ? 'Hide Map' : 'Masquer la carte')
-                : (language === 'en' ? 'Show Map' : 'Afficher la carte')
-              }
-            </button>
+      {viewMode !== 'places' && (
+        <NavigationBar language={language} suggestions={suggestionsState} startDate={startDate} />
+      )}
+
+      {/* Fullscreen map */}
+      {isFullscreenMap && (
+        <DynamicMap
+          suggestions={suggestionsState}
+          fullscreen={true}
+          onClose={() => setIsFullscreenMap(false)}
+          itineraryItems={itineraryMapItems}
+        />
+      )}
+
+      {/* Conditional rendering based on map state and view mode */}
+      {viewMode === 'itinerary' && !isFullscreenMap && (
+        <div className={`flex flex-col lg:flex-row ${isMapExpanded ? 'lg:space-x-4' : ''} w-full max-w-full px-0`}>
+          {/* Itinerary section - takes full width when map is not expanded, or left side when map is expanded */}
+          <div className={`${isMapExpanded ? 'lg:w-1/2' : 'w-full'}`}>
+            <ResultSection
+              id="itinerary"
+              title={language === 'en' ? 'Day-by-Day Itinerary' : 'Itinéraire Jour par Jour'}
+              items={suggestionsState.itinerary}
+              type="itinerary"
+            />
           </div>
           
-          {isMapExpanded && (
-            <div className="h-[250px] md:h-[400px] transition-all duration-300 ease-in-out">
+          {/* Map section - only visible when expanded, takes right side */}
+          {isMapExpanded && !isFullscreenMap && (
+            <div className="w-full lg:w-1/2 mt-4 lg:mt-0 sticky top-4 h-[600px]">
               <DynamicMap
                 suggestions={suggestionsState}
+                itineraryItems={itineraryMapItems}
               />
             </div>
           )}
         </div>
       )}
 
-      <ResultSection
-        id="itinerary"
-        title={language === 'en' ? 'Day-by-Day Itinerary' : 'Itinéraire Jour par Jour'}
-        items={suggestionsState.itinerary}
-        type="itinerary"
-      />
-
-      <ActivityIdeasInterests
-        destination={destination}
-        language={language}
-        onAddActivity={(activity) => {
-          const lastDay = suggestionsState.itinerary[suggestionsState.itinerary.length - 1]?.day || 1;
-          setItineraryActivities(prev => {
-            const newActivities = { ...prev };
-            const dayActivities = prev[lastDay] || [];
-            
-            newActivities[lastDay] = [...dayActivities, activity];
-            return newActivities;
-          });
-        }}
-      />
-
-      <ResultSection
-        id="attractions"
-        title={language === 'en' ? 'Must-See Attractions' : 'Attractions Incontournables'}
-        items={suggestionsState.mustSeeAttractions}
-        type="attractions"
-      />
-
-      <ResultSection
-        id="gems"
-        title={language === 'en' ? 'Hidden Gems' : 'Trésors Cachés'}
-        items={suggestionsState.hiddenGems}
-        type="gems"
-      />
-
-      <ResultSection
-        id="restaurants"
-        title={language === 'en' ? 'Restaurants' : 'Restaurants'}
-        items={suggestionsState.restaurants}
-        type="restaurants"
-      />
-
-      <div className="mt-8 mb-8">
-        <RestaurantIdeas 
-          destination={destination}
-          language={language}
-          onAddRestaurant={handleAddRestaurant}
-        />
-      </div>
-
-      {suggestionsState.events.length > 0 && (
-        <ResultSection
-          id="events"
-          title={language === 'en' ? 'Events' : 'Événements'}
-          items={suggestionsState.events}
-          type="events"
-        />
-      )}
-
-      <ResultSection
-        id="accommodation"
-        title={language === 'en' ? 'Where to Stay' : 'Où Séjourner'}
-        items={suggestionsState.accommodation}
-        type="accommodation"
-      />
-
-      <div id="advice" className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-semibold mb-4 bg-[#FDF0D5] px-4 py-2 rounded-lg">
-          {language === 'en' ? 'Practical Advice' : 'Conseils Pratiques'}
-        </h2>
-        <div className="space-y-6">
-          <div className="text-black text-base mt-2">
-            {renderTextWithLinks(suggestionsState.practicalAdvice)}
-            {savedAnswers.map((answer, index) => (
-              <div key={index} className="mt-4 pt-4 border-t">
-                {renderTextWithLinks(answer)}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {suggestionsState.practicalAdvice && (
-        <div className="mt-4">
-          <SpecificPracticalAdvice
-            destination={destination}
-            language={language}
-            practicalAdvice={suggestionsState.practicalAdvice}
-            onSaveAnswer={(answer) => setSavedAnswers(prev => [...prev, answer])}
-          />
-        </div>
-      )}
-
-      <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>
-              {language === 'en' ? 'Save Your Trip' : 'Sauvegarder Votre Voyage'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="trip-title" className="text-right">
-                {language === 'en' ? 'Title' : 'Titre'}
-              </Label>
-              <Input
-                id="trip-title"
-                value={tripTitle}
-                onChange={(e) => setTripTitle(e.target.value)}
-                placeholder={language === 'en' ? 'My Trip to...' : 'Mon voyage à...'}
-                className="col-span-3"
+      {/* Places view or non-itinerary view with map */}
+      {(viewMode !== 'itinerary' || (viewMode === 'itinerary' && isFullscreenMap)) && (
+        <>
+          {isMapExpanded && !isFullscreenMap && (
+            <div className="mb-4 w-full">
+              <DynamicMap
+                suggestions={suggestionsState}
+                itineraryItems={itineraryMapItems}
               />
             </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setIsSaveDialogOpen(false)} 
-              disabled={isSaving}
-            >
-              {language === 'en' ? 'Cancel' : 'Annuler'}
-            </Button>
-            <Button 
-              type="submit" 
-              onClick={handleSaveTrip}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{language === 'en' ? 'Saving...' : 'Sauvegarde...'}</span>
-                </div>
-              ) : (
-                <span>{language === 'en' ? 'Save' : 'Sauvegarder'}</span>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          )}
 
-      <Checkout 
-        isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
+          {viewMode === 'itinerary' && (
+            <ResultSection
+              id="itinerary"
+              title={language === 'en' ? 'Day-by-Day Itinerary' : 'Itinéraire Jour par Jour'}
+              items={suggestionsState.itinerary}
+              type="itinerary"
+            />
+          )}
+        </>
+      )}
+      {viewMode === 'places' && (
+        <>
+          <ResultSection
+            id="attractions"
+            title={language === 'en' ? 'Must-See Attractions' : 'Attractions Incontournables'}
+            items={suggestionsState.mustSeeAttractions}
+            type="attractions"
+          />
+          
+          <ResultSection
+            id="gems"
+            title={language === 'en' ? 'Hidden Gems' : 'Trésors Cachés'}
+            items={suggestionsState.hiddenGems}
+            type="gems"
+          />
+        </>
+      )}
+      <BottomNavBar 
         language={language}
+        isMapExpanded={isMapExpanded}
+        onShareClick={handleShareClick}
+        onMapToggle={handleMapButtonClick}
+        onReset={handleReset}
+        onSaveTrip={handleSaveTrip}
+        isLoggedIn={!!user}
       />
     </div>
   );
