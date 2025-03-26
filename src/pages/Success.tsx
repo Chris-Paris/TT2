@@ -296,10 +296,7 @@ export default function Success() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header 
-        language={language} 
-        onLanguageChange={(newLang) => setLanguage(newLang)} 
-      />
+      <Header language={language} />
       
       <main className="flex-1 container max-w-4xl mx-auto px-4 py-8">
         <div className="bg-card rounded-lg shadow-lg p-6 md:p-8">

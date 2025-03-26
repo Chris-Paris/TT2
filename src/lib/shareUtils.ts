@@ -17,30 +17,39 @@ export const formatTravelPlanForSharing = (suggestions: TravelSuggestions, langu
   });
 
   // Restaurants
-  text += `\n${language === 'fr' ? '🍽️ Restaurants' : '🍽️ Restaurants'}\n`;
-  suggestions.restaurants.forEach(restaurant => {
-    text += `• ${restaurant.title} - ${restaurant.description}\n`;
-  });
+  if (suggestions.restaurants && Array.isArray(suggestions.restaurants) && suggestions.restaurants.length > 0) {
+    text += `\n${language === 'fr' ? '🍽️ Restaurants' : '🍽️ Restaurants'}\n`;
+    suggestions.restaurants.forEach((restaurant: any) => {
+      text += `• ${restaurant.title} - ${restaurant.description}\n`;
+    });
+  }
 
   // Itinerary
   text += `\n${language === 'fr' ? '📅 Itinéraire' : '📅 Itinerary'}\n`;
   suggestions.itinerary.forEach(day => {
     text += `${language === 'fr' ? 'Jour' : 'Day'} ${day.day}:\n`;
     day.activities.forEach(activity => {
-      text += `• ${activity}\n`;
+      const activityText = typeof activity === 'string' 
+        ? activity 
+        : `${activity.activity} at ${activity.place}`;
+      text += `• ${activityText}\n`;
     });
     text += '\n';
   });
 
   // Practical advice
-  text += `${language === 'fr' ? '💡 Conseils Pratiques' : '💡 Practical Advice'}\n`;
-  text += `${suggestions.practicalAdvice}\n\n`;
+  if (suggestions.practicalAdvice) {
+    text += `${language === 'fr' ? '💡 Conseils Pratiques' : '💡 Practical Advice'}\n`;
+    text += `${suggestions.practicalAdvice}\n\n`;
+  }
 
   // Accommodation
-  text += `${language === 'fr' ? '🏨 Hébergement Recommandé' : '🏨 Recommended Accommodation'}\n`;
-  suggestions.accommodation.forEach(acc => {
-    text += `• ${acc.title} - ${acc.description}\n`;
-  });
+  if (suggestions.accommodation && Array.isArray(suggestions.accommodation) && suggestions.accommodation.length > 0) {
+    text += `${language === 'fr' ? '🏨 Hébergement Recommandé' : '🏨 Recommended Accommodation'}\n`;
+    suggestions.accommodation.forEach((acc: any) => {
+      text += `• ${acc.title} - ${acc.description}\n`;
+    });
+  }
 
   // Add source URL
   text += `\n${language === 'fr' ? 'Trouvé sur' : 'Found on'} https://www.travellingtrip.com/`;

@@ -7,15 +7,30 @@ const FLICKR_API_KEY = '4306b70370312d7ccde3304184179b2b';
 const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY || 'DKb0VyZUTezsiVcAQHYR8FcZ6MgD21ZhIvGY4XTGoo9evTxdWNcWrSTC';
 
 // Function to fetch a thumbnail image from Flickr
-async function fetchPlaceThumbnail(searchTerm: string): Promise<string | null> {
+async function fetchPlaceThumbnail(searchTerm: string, coordinates?: { lat: number; lng: number }): Promise<string | null> {
   try {
     if (!searchTerm) return null;
     
-    const url = `https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=${FLICKR_API_KEY}&text=${encodeURIComponent(
-      searchTerm
-    )}&sort=relevance&per_page=1&format=json&nojsoncallback=1&safe_search=1&content_type=1&media=photos`;
+    let url = new URL('https://api.flickr.com/services/rest/');
+    url.searchParams.set('method', 'flickr.photos.search');
+    url.searchParams.set('api_key', FLICKR_API_KEY);
+    url.searchParams.set('text', searchTerm);
+    url.searchParams.set('sort', 'relevance');
+    url.searchParams.set('per_page', '5');
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('nojsoncallback', '1');
+    url.searchParams.set('safe_search', '1');
+    url.searchParams.set('content_type', '1');
+    url.searchParams.set('media', 'photos');
 
-    const response = await fetch(url);
+    // If coordinates are provided, add location-based search
+    if (coordinates) {
+      url.searchParams.set('lat', String(coordinates.lat));
+      url.searchParams.set('lon', String(coordinates.lng));
+      url.searchParams.set('radius', '5');
+    }
+
+    const response = await fetch(url.toString());
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -26,9 +41,18 @@ async function fetchPlaceThumbnail(searchTerm: string): Promise<string | null> {
       return null;
     }
 
-    const photo = data.photos.photo[0];
-    // Use the small square thumbnail size (s)
-    return `https://live.staticflickr.com/${photo.server}/${photo.id}_${photo.secret}_q.jpg`;
+    // Try to find a landscape photo first
+    const landscapePhoto = data.photos.photo.find((photo: any) => {
+      return photo.width_o >= photo.height_o; // Original width > height indicates landscape
+    });
+
+    if (landscapePhoto) {
+      return `https://live.staticflickr.com/${landscapePhoto.server}/${landscapePhoto.id}_${landscapePhoto.secret}_b.jpg`;
+    }
+
+    // If no landscape photo found, use the first one
+    const firstPhoto = data.photos.photo[0];
+    return `https://live.staticflickr.com/${firstPhoto.server}/${firstPhoto.id}_${firstPhoto.secret}_b.jpg`;
   } catch (error) {
     console.error('Error fetching Flickr thumbnail:', error);
     return null;
@@ -40,7 +64,7 @@ async function fetchPexelsThumbnail(searchTerm: string): Promise<string | null> 
   try {
     if (!searchTerm) return null;
     
-    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchTerm)}&per_page=1`;
+    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchTerm)}&per_page=1&orientation=landscape`;
     
     const response = await fetch(url, {
       headers: {
@@ -58,12 +82,19 @@ async function fetchPexelsThumbnail(searchTerm: string): Promise<string | null> 
       return null;
     }
     
-    // Return the medium size photo
-    return data.photos[0].src.medium;
+    return data.photos[0].src.large;
   } catch (error) {
     console.error('Error fetching Pexels thumbnail:', error);
     return null;
   }
+}
+
+interface Location {
+  title: string;
+  description: string;
+  location: string;
+  coordinates?: { lat: number; lng: number };
+  thumbnail?: string;
 }
 
 interface PlaceCardProps {
@@ -77,7 +108,6 @@ interface PlaceCardProps {
   bookingInfo?: string | null;
   mustSeeAttractions?: Location[];
   hiddenGems?: Location[];
-  compact?: boolean;
 }
 
 export function PlaceCard({
@@ -90,10 +120,70 @@ export function PlaceCard({
   bookingUrl = null,
   bookingInfo = null,
   mustSeeAttractions = [],
-  hiddenGems = [],
-  compact = false
+  hiddenGems = []
 }: PlaceCardProps) {
   const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasLoadedPhotos, setHasLoadedPhotos] = useState(false);
+
+  // Find the coordinates if available
+  const placeData = [...(mustSeeAttractions || []), ...(hiddenGems || [])].find(place => 
+    place.title?.toLowerCase().includes(title?.toLowerCase()) || 
+    title?.toLowerCase().includes(place.title?.toLowerCase())
+  );
+  
+  const coordinates = placeData?.coordinates;
+
+  // Fetch thumbnail when component mounts or when title changes
+  useEffect(() => {
+    const fetchThumbnail = async () => {
+      if (hasLoadedPhotos) {
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        // First try to find matching must-see attraction or hidden gem
+        const matchingAttraction = mustSeeAttractions?.find(attraction => 
+          attraction.title?.toLowerCase().includes(title?.toLowerCase()) || 
+          title?.toLowerCase().includes(attraction.title?.toLowerCase())
+        );
+
+        const matchingGem = hiddenGems?.find(gem => 
+          gem.title?.toLowerCase().includes(title?.toLowerCase()) || 
+          title?.toLowerCase().includes(gem.title?.toLowerCase())
+        );
+
+        // If found in must-see or hidden gems, use their thumbnail
+        if (matchingAttraction?.thumbnail || matchingGem?.thumbnail) {
+          setThumbnail(matchingAttraction?.thumbnail || matchingGem?.thumbnail);
+          setHasLoadedPhotos(true);
+          return;
+        }
+
+        // Otherwise fetch new thumbnail
+        const flickrThumbnail = await fetchPlaceThumbnail(`${title} ${location}`, coordinates);
+        if (flickrThumbnail) {
+          setThumbnail(flickrThumbnail);
+          setHasLoadedPhotos(true);
+          return;
+        }
+
+        // Fallback to Pexels if Flickr fails
+        const pexelsThumbnail = await fetchPexelsThumbnail(`${title} ${location}`);
+        if (pexelsThumbnail) {
+          setThumbnail(pexelsThumbnail);
+          setHasLoadedPhotos(true);
+        }
+      } catch (error) {
+        console.error('Error loading thumbnail:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchThumbnail();
+  }, [title, location, mustSeeAttractions, hiddenGems, coordinates]);
 
   // Find if this place is a must-see attraction or hidden gem
   const isMustSee = mustSeeAttractions?.some(attraction => 
@@ -124,43 +214,34 @@ export function PlaceCard({
     );
   };
 
-  // Find the coordinates if available
-  const placeData = [...(mustSeeAttractions || []), ...(hiddenGems || [])].find(place => 
-    place.title?.toLowerCase().includes(title?.toLowerCase()) || 
-    title?.toLowerCase().includes(place.title?.toLowerCase())
-  );
-  
-  const coordinates = placeData?.coordinates;
-
-  // Fetch thumbnail image when component mounts
-  useEffect(() => {
-    const loadThumbnail = async () => {
-      if (!title || !location) return;
-      
-      try {
-        // Use the title and location for better search results
-        const searchTerm = `${title} ${location}`;
-        
-        // First try Flickr
-        let thumbnailUrl = await fetchPlaceThumbnail(searchTerm);
-        
-        // If Flickr fails, try Pexels as fallback
-        if (!thumbnailUrl) {
-          console.log('Flickr image not found, trying Pexels...');
-          thumbnailUrl = await fetchPexelsThumbnail(searchTerm);
-        }
-        
-        setThumbnail(thumbnailUrl);
-      } catch (error) {
-        console.error('Error loading thumbnail:', error);
-      }
-    };
-
-    loadThumbnail();
-  }, [title, location]);
-
   return (
-    <div className={`bg-white rounded-md ${compact ? 'p-2' : 'p-3'} border border-gray-200 shadow-sm`}>
+    <div className={`relative w-full ${isLoading ? 'opacity-75' : ''}`}>
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-sm text-gray-500">
+            <span className="mr-1">
+              {language === 'fr' ? 'Chargement...' : 'Loading...'}
+            </span>
+            <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        </div>
+      )}
+
+      {thumbnail && (
+        <div className="relative w-full mb-4">
+          <img
+            src={thumbnail}
+            alt={title}
+            className="w-full h-[140px] lg:h-[250px] object-cover rounded-lg"
+            style={{
+              aspectRatio: '16/9',
+              height: 'auto'
+            }}
+            loading="lazy"
+          />
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent h-1/4" />
+        </div>
+      )}
       <div className="flex justify-between items-start mb-2">
         <div className="flex-1">
           {renderBadges()}
@@ -209,17 +290,6 @@ export function PlaceCard({
           </div>
         </div>
       </div>
-
-      {thumbnail && (
-        <div className="flex-shrink-0 mt-2 mb-2 flex justify-center">
-          <img 
-            src={thumbnail} 
-            alt={title}
-            className="w-full h-auto object-cover rounded-md"
-            loading="lazy"
-          />
-        </div>
-      )}
       
       <div className="flex flex-wrap gap-2 mt-3">
         {bookingUrl && (

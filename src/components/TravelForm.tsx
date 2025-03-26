@@ -8,7 +8,7 @@ import { analytics } from '@/lib/analytics';
 import { WhereToGo } from './ui/WhereToGo';
 import { ArrowRight } from 'lucide-react';
 
-export type Interest = 'Culture' | 'Nature' | 'Food' | 'Shopping' | 'Adventure' | 'Relaxation' | 'History' | 'Art' | 'Couple Trip' | 'Family Trip' | 'Night Life' | 'Business Trip';
+export type Interest = 'Culture' | 'Nature' | 'Food' | 'Shopping' | 'Adventure' | 'Relaxation' | 'History' | 'Art' | 'Couple Trip' | 'Family Trip' | 'Night Life' | 'Business Trip' | 'Roadtrip';
 
 interface Recommendation {
   name: string;
@@ -58,14 +58,15 @@ const interestTranslations: Record<Interest, Record<'en' | 'fr', string>> = {
   'Couple Trip': { en: 'Couple Trip', fr: 'Voyage en couple' },
   'Family Trip': { en: 'Family Trip', fr: 'Voyage en famille' },
   'Night Life': { en: 'Night Life', fr: 'Vie nocturne' },
-  'Business Trip': { en: 'Business Trip', fr: 'Voyage d\'affaires' }
+  'Business Trip': { en: 'Business Trip', fr: 'Voyage d\'affaires' },
+  'Roadtrip': { en: 'Roadtrip', fr: 'Roadtrip' }
 };
 
-const interests: Interest[] = ['Culture', 'Nature', 'Food', 'Shopping', 'Adventure', 'Relaxation', 'History', 'Art', 'Couple Trip', 'Family Trip', 'Night Life', 'Business Trip'];
+const interests: Interest[] = ['Culture', 'Nature', 'Food', 'Shopping', 'Adventure', 'Relaxation', 'History', 'Art', 'Couple Trip', 'Family Trip', 'Night Life', 'Business Trip', 'Roadtrip'];
 
 // Split interests into two groups: initial visible ones and hidden ones
-const initialInterests: Interest[] = ['Culture', 'Nature', 'Food', 'Shopping', 'Adventure', 'Relaxation'];
-const hiddenInterests: Interest[] = ['History', 'Art', 'Couple Trip', 'Family Trip', 'Night Life', 'Business Trip'];
+const initialInterests: Interest[] = ['Culture', 'Nature', 'Food', 'Shopping', 'Adventure', 'Relaxation', 'Couple Trip', 'Family Trip', 'Roadtrip'];
+const hiddenInterests: Interest[] = ['History', 'Art', 'Night Life', 'Business Trip'];
 
 interface TravelFormProps {
   onSubmit: (data: FormValues) => void;
@@ -79,9 +80,8 @@ export const formSchema = z.object({
   destination: z.string().min(2, {
     message: 'Destination must be at least 2 characters.'
   }),
-  date: z.date(),
   duration: z.number().min(1).max(30),
-  interests: z.array(z.enum(['Culture', 'Nature', 'Food', 'Shopping', 'Adventure', 'Relaxation', 'History', 'Art', 'Couple Trip', 'Family Trip', 'Night Life', 'Business Trip']))
+  interests: z.array(z.enum(['Culture', 'Nature', 'Food', 'Shopping', 'Adventure', 'Relaxation', 'History', 'Art', 'Couple Trip', 'Family Trip', 'Night Life', 'Business Trip', 'Roadtrip']))
 });
 
 export type FormValues = z.infer<typeof formSchema>;
@@ -122,7 +122,6 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
     resolver: zodResolver(formSchema),
     defaultValues: {
       destination: '',
-      date: new Date(),
       duration: 3,
       interests: ['Culture', 'Nature'] // Update default value here
     },
@@ -144,36 +143,15 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
     }
   }, [language, form]);
 
-  const getMonthOptions = () => {
-    const options = [];
-    const currentDate = new Date();
-    
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
-      const value = date.toISOString().slice(0, 7); // YYYY-MM format
-      const label = date.toLocaleDateString(language === 'en' ? 'en-US' : 'fr-FR', { 
-        year: 'numeric', 
-        month: 'long' 
-      });
-      options.push({ value, label });
-    }
-    
-    return options;
-  };
-
-  const monthOptions = getMonthOptions();
-
-  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const [year, month] = e.target.value.split('-').map(Number);
-    const date = new Date(year, month - 1, 1);
-    form.setValue('date', date);
-  };
-
   const handleSubmit = async (data: FormValues) => {
     const tripIframe = document.getElementById('tripIframe');
     if (tripIframe) {
       tripIframe.style.display = 'none';
     }
+    
+    // Log the form data for debugging
+    console.log('Form data submitted:', data);
+    
     analytics.trackTravelPlanGenerated(
       data.destination,
       data.duration,
@@ -183,7 +161,7 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
   };
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6 md:space-y-5 max-w-4xl mx-auto pt-0">
+    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6 lg:space-y-5 max-w-lg lg:max-w-7xl mx-auto pt-0">
       {/* Background video section with title overlay */}
       <div className="relative w-full" style={{ height: "300px" }}>
         {/* Background video */}
@@ -191,13 +169,13 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
         
         {/* Content that goes on top of the video */}
         <div className="relative z-10 h-full flex flex-col justify-center">
-          <h1 className="text-white text-2xl md:text-3xl font-bold text-center mb-4 text-shadow-sm">
+          <h1 className="text-white text-4xl lg:text-5xl font-bold text-center mb-4 text-shadow-sm">
             {language === 'en' 
               ? 'Your trip planned in one minute.'
               : 'Votre voyage planifié en une minute.'}
           </h1>
           <div className="relative flex items-center justify-center overflow-hidden mt-1.5">
-            <h2 className="text-xl md:text-2xl font-semibold text-center text-white [animation:pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] text-shadow-sm">
+            <h2 className="text-xl lg:text-2xl font-semibold text-center text-white [animation:pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] text-shadow-sm">
             {language === 'en'
               ? 'Skip the endless searching. Get a personalized itinerary in few clicks planned by AI !'
               : 'Évitez les recherches interminables. Obtenez un itinéraire planifié en quelques clics avec l\'IA !'}
@@ -207,7 +185,7 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
           <div className="flex justify-center mt-6">
             <button
               type="button"
-              className="text-white text-lg md:text-xl text-center hover:opacity-80 transition-opacity duration-200 flex items-center gap-2 underline underline-offset-4"
+              className="text-white text-lg lg:text-xl text-center hover:opacity-80 transition-opacity duration-200 flex items-center gap-2 underline underline-offset-4"
               onClick={() => {
                 document.getElementById('destination-ideas-trigger')?.click();
               }}
@@ -228,71 +206,64 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
         </div>
       </div>
 
-      {/* Where do you want to go section - moved outside of the video background */}
-      <div>
-        <label className="block text-sm font-medium text-white bg-[#5f9585] p-2 rounded-t-lg">
-          {language === 'en' ? 'Where do you want to go?' : 'Où voulez-vous aller?'}
-        </label>
-        <div className="flex gap-2 items-center bg-[#5f9585] p-3 rounded-b-lg mt-0">
-          <div className="flex-1">
-            <PlacesAutocomplete
-              register={form.register}
-              setValue={form.setValue}
-              language={language}
-              onFocus={() => {}}
-              onBlur={() => {}}
-            />
-          </div>
-        </div>
-        {form.formState.errors.destination && (
-          <p className="text-red-500 text-sm mt-2">
-            {form.formState.errors.destination.message}
-          </p>
-        )}
-      </div>
+      {/* Unified Search Bar */}
+      <div className="flex flex-col lg:mx-32 lg:mt-2">
+        <div className="flex-1">
+          <div className="bg-[#5f9585] rounded-lg p-2">
+            <div className="flex flex-row gap-3">
+              <div className="flex-[2]">
+                <label className="block text-sm font-medium text-white">
+                  {language === 'en' ? 'Where are you going?' : 'Où voulez-vous aller?'}
+                </label>
+                <div className="mt-1">
+                  <PlacesAutocomplete
+                    register={form.register}
+                    setValue={form.setValue}
+                    language={language}
+                    onFocus={() => {}}
+                    onBlur={() => {}}
+                  />
+                </div>
+              </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-white bg-[#5f9585] p-2 rounded-t-lg">
-            {language === 'en' ? 'When' : 'Quand'}
-          </label>
-          <div className="bg-[#5f9585] p-3 rounded-b-lg">
-            <select
-              className="w-full p-2.5 border rounded-lg bg-white shadow-sm hover:border-gray-300 focus:border-[#d99a08] focus:ring-2 focus:ring-[#d99a08]/20 transition-all duration-200"
-              onChange={handleMonthChange}
-              defaultValue={monthOptions[0]?.value}
-            >
-              {monthOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <div className="flex-[1]">
+                <label className="block text-sm font-medium text-white">
+                  {language === 'en' ? 'Duration' : 'Durée'}
+                </label>
+                <div className="mt-1">
+                  <select
+                    {...form.register('duration', { valueAsNumber: true })}
+                    className="w-full h-10 border rounded-lg bg-white shadow-sm hover:border-gray-300 focus:border-[#d99a08] focus:ring-2 focus:ring-[#d99a08]/20 transition-all duration-200"
+                    defaultValue="3"
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((days) => (
+                      <option key={days} value={days}>
+                        {days} {language === 'en' ? (days === 1 ? 'day' : 'days') : (days === 1 ? 'jour' : 'jours')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-white bg-[#5f9585] p-2 rounded-t-lg">
-            {language === 'en' ? 'Duration' : 'Durée'}
-          </label>
-          <div className="bg-[#5f9585] p-3 rounded-b-lg">
-            <select
-              {...form.register('duration', { valueAsNumber: true })}
-              className="w-full p-2.5 border rounded-lg bg-white shadow-sm hover:border-gray-300 focus:border-[#d99a08] focus:ring-2 focus:ring-[#d99a08]/20 transition-all duration-200"
-              defaultValue="3"
-            >
-              {Array.from({ length: 31 }, (_, i) => i + 1).map((days) => (
-                <option key={days} value={days}>
-                  {days} {language === 'en' ? (days === 1 ? 'day' : 'days') : (days === 1 ? 'jour' : 'jours')}
-                </option>
-              ))}
-            </select>
-          </div>
-          {form.formState.errors.duration && (
+          {form.formState.errors.destination && (
             <p className="text-red-500 text-sm mt-2">
-              {form.formState.errors.duration.message}
+              {form.formState.errors.destination.message}
             </p>
           )}
+        </div>
+
+        <div className="flex justify-center">
+          <div className="hidden">
+            <WhereToGo 
+              language={language} 
+              onDestinationSelect={(destination) => {
+                form.setValue('destination', destination);
+              }}
+              id="destination-ideas-trigger"
+            />
+          </div>
         </div>
       </div>
 
@@ -416,7 +387,7 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
             <button
               type="button"
               onClick={() => setIsGifExpanded(!isGifExpanded)}
-              className="text-black text-lg md:text-xl text-center hover:opacity-80 transition-opacity duration-200 flex items-center gap-2 underline underline-offset-4"
+              className="text-black text-lg lg:text-xl text-center hover:opacity-80 transition-opacity duration-200 flex items-center gap-2 underline underline-offset-4"
             >
               <span>{language === 'en' ? 'How does it work' : 'Comment ça marche'}</span>
               <svg 
@@ -446,11 +417,11 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
             </div>
           )}
 
-          <div className="mt-8 md:mt-10 w-full max-w-4xl mx-auto bg-[#FDF0D5] rounded-lg p-6">
-            <h3 className="text-xl md:text-2xl font-bold text-center mb-6">
+          <div className="mt-8 lg:mt-10 w-full max-w-1280 lg:max-w-1280 mx-auto bg-[#FDF0D5] rounded-lg p-6">
+            <h3 className="text-xl lg:text-2xl font-bold text-center mb-6">
               {language === 'en' ? 'What our travelers say' : 'Ce que disent nos voyageurs'}
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {recommendations[language].map((rec, index) => (
                 <div
                   key={index}
@@ -504,7 +475,7 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
             </div>
           </div>
 
-          <div className="mt-8 md:mt-10">
+          <div className="mt-8 lg:mt-10">
             <iframe
               className="w-full"
               height="250"

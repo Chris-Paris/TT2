@@ -8,7 +8,7 @@ interface FooterProps {
 export function Footer({ language, onLanguageChange }: FooterProps) {
   return (
     <footer className="bg-white border-t mt-6">
-      <div className="container max-w-4xl mx-auto px-3 py-4">
+      <div className="container max-w-lg lg:max-w-7xl mx-auto px-3 py-4">
         <div className="flex flex-col items-center gap-4">
           <a
             href="https://tally.so/r/3xRPEJ"
@@ -20,7 +20,7 @@ export function Footer({ language, onLanguageChange }: FooterProps) {
             {language === 'en' ? 'Tell us what you need!' : 'Dites-nous ce qui vous manque !'}
           </a>
           
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 w-full">
+          <div className="flex flex-col lg:flex-row justify-between items-center gap-4 w-full">
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600">
                 {new Date().getFullYear()} {' '}

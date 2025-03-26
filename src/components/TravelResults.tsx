@@ -105,7 +105,7 @@ function TravelResults({
   const [isFullscreenMap, setIsFullscreenMap] = useState(false);
   const [itineraryMapItems, setItineraryMapItems] = useState<any[]>([]);
   const [suggestionsState, setSuggestionsState] = useState<TravelSuggestions>(suggestions);
-  const [startDate, setStartDate] = useState<Date | null>(new Date());
+  const [startDate, setStartDate] = useState<Date | null>(null);
 
   // Ensure we have valid suggestions before accessing properties
   if (!suggestionsState || !suggestionsState.itinerary) {
@@ -426,13 +426,6 @@ function TravelResults({
     );
     if (gem?.coordinates) return gem.coordinates;
 
-    // Then check in events
-    const event = suggestionsState.events.find(
-      item => item.title.toLowerCase().includes(activityTitle.toLowerCase()) || 
-             activityTitle.toLowerCase().includes(item.title.toLowerCase())
-    );
-    if (event?.coordinates) return event.coordinates;
-
     // If no match found, return destination coordinates as fallback
     return suggestionsState.destination.coordinates;
   };
@@ -545,7 +538,7 @@ function TravelResults({
                             {day.day === 1 ? (
                               <AddDate
                                 language={language}
-                                selectedDate={startDate}
+                                selectedDate={startDate || undefined}
                                 onDateSelected={(date) => setStartDate(date)}
                               />
                             ) : (
@@ -628,36 +621,6 @@ function TravelResults({
                   })}
                 </div>
               </>
-            )}
-            {type === 'accommodation' && (
-              <div className="overflow-x-auto -mx-4 px-4">
-                <div className="flex gap-4 mb-6 min-w-max">
-                  <a
-                    href={`https://${language === 'fr' ? 'fr' : 'www'}.airbnb.com/s/${encodeURIComponent(suggestionsState.destination.name)}/homes`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center px-4 py-2 bg-[#FF5A5F] text-white rounded-md text-sm whitespace-nowrap"
-                  >
-                    {language === 'en' ? 'Airbnb' : 'Airbnb'}
-                  </a>
-                  <a
-                    href={`https://booking.com/${encodeURIComponent(suggestionsState.destination.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center px-4 py-2 bg-[#003580] text-white rounded-md hover:bg-[#003580]/90 transition-colors text-[14px] sm:text-base"
-                  >
-                    {language === 'en' ? 'Booking.com' : 'Booking.com'}
-                  </a>
-                  <a
-                    href={`https://trip.tp.st/KPH2sAPm`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center px-4 py-2 bg-[#003580] text-white rounded-md hover:bg-[#003580]/90 transition-colors whitespace-nowrap"
-                  >
-                    {language === 'en' ? 'Trip.com' : 'Trip.com'}
-                  </a>
-                </div>
-              </div>
             )}
             {type !== 'itinerary' && (
               <>
@@ -810,22 +773,26 @@ function TravelResults({
     }
 
     try {
-      // Update travel suggestions with the modified itinerary
       const updatedSuggestions = {
         ...suggestionsState,
         itinerary: suggestionsState.itinerary.map(day => ({
           ...day,
-          activities: itineraryActivities[day.day] || day.activities
+          activities: day.activities.map(activity => ({
+            activity: activity.activity,
+            place: activity.place,
+            description: activity.description,
+            nearbyLandmarks: activity.nearbyLandmarks || [],
+            bookingInfo: activity.bookingInfo,
+            travelTime: activity.travelTime
+          }))
         }))
       };
 
       await saveTrip({
-        title: destination,
-        destination,
-        duration,
-        language,
-        suggestions: updatedSuggestions,
-        userId: user.id
+        user_id: user?.id || '',
+        trip_title: destination,
+        destination: destination,
+        data: updatedSuggestions
       });
 
       toast({
@@ -891,7 +858,7 @@ function TravelResults({
       </div>
 
       {viewMode !== 'places' && (
-        <NavigationBar language={language} suggestions={suggestionsState} startDate={startDate} />
+        <NavigationBar language={language} suggestions={suggestionsState} startDate={startDate || undefined} />
       )}
 
       {/* Fullscreen map */}

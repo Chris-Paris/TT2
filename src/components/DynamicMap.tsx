@@ -89,17 +89,18 @@ export function DynamicMap({ suggestions, fullscreen = false, onClose, itinerary
 
   // Add itinerary items if provided
   const itineraryLocations = itineraryItems
-    .filter(item => item.coordinates)
     .sort((a, b) => {
-      // Sort by displayIndex to ensure correct order
-      return (a.displayIndex || 0) - (b.displayIndex || 0);
+      // Sort by day first, then by index within the day
+      const dayCompare = a.day - b.day;
+      if (dayCompare !== 0) return dayCompare;
+      return a.index - b.index;
     })
-    .map((item) => ({
-      coordinates: item.coordinates!,
+    .map((item, overallIndex) => ({
+      coordinates: item.coordinates || suggestions.destination.coordinates, // Use destination coordinates as fallback
       title: item.title,
       description: item.description,
       type: 'itinerary',
-      number: item.displayIndex || 1, // Use displayIndex directly
+      number: overallIndex + 1, // Use overall index + 1 to maintain sequential numbering
       day: item.day,
       index: item.index
     })) as Point[];
@@ -107,76 +108,26 @@ export function DynamicMap({ suggestions, fullscreen = false, onClose, itinerary
   // Debug logging
   console.log('Itinerary locations for map:', itineraryLocations);
 
-  // Use itinerary locations if in fullscreen mode and they exist, otherwise use base locations
-  const locations = fullscreen && itineraryLocations.length > 0 ? itineraryLocations : baseLocations;
+  // Always use itinerary locations if they exist, otherwise use base locations
+  const locations = itineraryLocations.length > 0 ? itineraryLocations : baseLocations;
 
   // Calculate bounds
   const bounds = locations.length > 0 
     ? L.latLngBounds(locations.map(loc => L.latLng(loc.coordinates!.lat, loc.coordinates!.lng)))
     : L.latLngBounds([[suggestions.destination.coordinates.lat, suggestions.destination.coordinates.lng]]);
 
-  // Function to calculate distance between two points
-  const calculateDistance = (point1: { lat: number; lng: number }, point2: { lat: number; lng: number }): number => {
-    return Math.sqrt(
-      Math.pow(point1.lat - point2.lat, 2) + 
-      Math.pow(point1.lng - point2.lng, 2)
-    );
-  };
-
   // Get ordered points for trajectory
-  let trajectoryPositions: [number, number][] = [];
-  
-  if (fullscreen && itineraryLocations.length > 0) {
-    // For fullscreen map with itinerary items, use the numerical order
-    // Sort by index to ensure correct order
-    const orderedItineraryPoints = [...itineraryLocations].sort((a, b) => 
-      (a.number as number) - (b.number as number)
-    );
-    
-    trajectoryPositions = orderedItineraryPoints.map(point => 
+  const trajectoryPositions = locations
+    .filter(location => location.coordinates) // Only include points with coordinates for the trajectory
+    .sort((a, b) => {
+      // Sort by number to ensure trajectory follows numbered order
+      const numberA = typeof a.number === 'number' ? a.number : parseInt(a.number as string);
+      const numberB = typeof b.number === 'number' ? b.number : parseInt(b.number as string);
+      return numberA - numberB;
+    })
+    .map(point => 
       [point.coordinates!.lat, point.coordinates!.lng] as [number, number]
     );
-  } else {
-    // For regular map view, use the existing approach
-    // Organize points in a logical order using a nearest neighbor approach
-    const organizePointsInLogicalOrder = () => {
-      // Start with the first location instead of the main destination
-      if (locations.length === 0) return [];
-      
-      const orderedPoints: Point[] = [locations[0]];
-      const remainingPoints = locations.slice(1);
-      
-      // While there are remaining points, find the nearest one to the last added point
-      while (remainingPoints.length > 0) {
-        const lastPoint = orderedPoints[orderedPoints.length - 1];
-        let nearestPointIndex = 0;
-        let shortestDistance = Infinity;
-        
-        // Find the nearest point
-        remainingPoints.forEach((point, index) => {
-          const distance = calculateDistance(lastPoint.coordinates!, point.coordinates!);
-          if (distance < shortestDistance) {
-            shortestDistance = distance;
-            nearestPointIndex = index;
-          }
-        });
-        
-        // Add the nearest point to our ordered list and remove it from remaining points
-        orderedPoints.push(remainingPoints[nearestPointIndex]);
-        remainingPoints.splice(nearestPointIndex, 1);
-      }
-      
-      return orderedPoints;
-    };
-
-    // Get ordered points for trajectory
-    const orderedPoints = organizePointsInLogicalOrder();
-    
-    // Create polyline positions
-    trajectoryPositions = orderedPoints.map(point => 
-      [point.coordinates!.lat, point.coordinates!.lng] as [number, number]
-    );
-  }
 
   useEffect(() => {
     if (mapRef.current) {

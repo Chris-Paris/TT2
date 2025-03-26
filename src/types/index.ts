@@ -27,10 +27,21 @@ export interface TravelSuggestions {
   };
   mustSeeAttractions: Location[];
   hiddenGems: Location[];
-  restaurants: Location[];
-  itinerary: { day: number; activities: string[] }[];
+  itinerary: { 
+    day: number; 
+    activities: {
+      activity: string;
+      place: string;
+      description: string;
+      nearbyLandmarks: string[];
+      bookingInfo: string | null;
+      travelTime: string | null;
+      time?: string;
+    }[] 
+  }[];
   events: Location[];
-  practicalAdvice: string;
-  accommodation: Location[];
   language?: 'en' | 'fr';
+  restaurants?: any[];
+  accommodation?: any[];
+  practicalAdvice?: string;
 }

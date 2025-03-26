@@ -11,6 +11,7 @@ interface ArrangeItemsProps<T> {
   dragHandleClassName?: string;
   dayIndex?: number;
   onCrossDayMove?: (sourceDay: number, targetDay: number, sourceIndex: number, targetIndex: number) => void;
+  startingIndex?: number;
 }
 
 export function ArrangeItems<T>({
@@ -21,7 +22,8 @@ export function ArrangeItems<T>({
   itemClassName = "",
   dragHandleClassName = "",
   dayIndex,
-  onCrossDayMove
+  onCrossDayMove,
+  startingIndex = 0
 }: ArrangeItemsProps<T>) {
   const handleDragStart = (e: React.DragEvent, index: number) => {
     e.dataTransfer.setData('text/plain', JSON.stringify({ 
@@ -54,37 +56,37 @@ export function ArrangeItems<T>({
   };
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
       {items.map((item, index) => (
         <div
           key={index}
-          className={`flex items-start py-0.5 ${itemClassName}`}
-          draggable="true"
-          style={{ position: 'relative' }}
+          draggable
           onDragStart={(e) => handleDragStart(e, index)}
           onDragOver={handleDragOver}
           onDrop={(e) => handleDrop(e, index)}
+          className={`flex-1 group bg-[#669BBC]/10 border border-[#5f9585]/30 rounded-md p-2 transition-colors relative ${itemClassName}`}
         >
-          <div className="w-2 h-2 rounded-full bg-primary mt-2 mr-3 flex-shrink-0" />
-          <div className={`flex-1 group ${index === 0 ? 'bg-[#669BBC]/10 border border-[#5f9585]/30' : 'hover:bg-[#669BBC]/10'} rounded-md p-2 transition-colors`}>
-            <div className="flex items-center gap-2">
-              {renderItem(item, index)}
-              <div className={`flex items-center gap-1 ${index === 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
-                <MoveVertical className={`w-4 h-4 text-gray-400 cursor-move ${dragHandleClassName}`} />
-                {onDelete && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-50"
-                    onClick={() => onDelete(index)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">Delete item</span>
-                  </Button>
-                )}
-              </div>
-            </div>
+          <div className="absolute top-2 right-2 flex items-center gap-1 opacity-100 transition-opacity z-10">
+            <MoveVertical className={`w-4 h-4 text-gray-400 cursor-move ${dragHandleClassName}`} />
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-50"
+                onClick={() => onDelete(index)}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="sr-only">Delete item</span>
+              </Button>
+            )}
           </div>
+          
+          {/* Activity number badge */}
+          <div className="absolute top-2 left-2 bg-[#003049] text-white text-xs font-medium px-2 py-1 rounded-full z-10">
+            {startingIndex + index + 1}
+          </div>
+          
+          <div>{renderItem(item, index)}</div>
         </div>
       ))}
     </div>

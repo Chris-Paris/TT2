@@ -146,7 +146,7 @@ export default function ResetPassword() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header language={language} onLanguageChange={handleLanguageChange} />
+      <Header language={language} />
       
       <main className="flex-1 container max-w-4xl mx-auto px-4 py-8">
         <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md">

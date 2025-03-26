@@ -60,13 +60,6 @@ export const analytics = {
       destination,
       duration,
       interests,
-    });
-  },
-
-  // Track when user clicks the PreciseItinerary button
-  trackPreciseItinerary: (destination: string) => {
-    mixpanel.track('Precise Itinerary Requested', {
-      destination,
       timestamp: new Date().toISOString()
     });
   },
@@ -107,7 +100,15 @@ export const analytics = {
   trackViewTravelResults: (destination: string) => {
     mixpanel.track('View Travel Results', {
       destination,
-      ...mixpanel.get_session_recording_properties() // Add session replay properties
+      timestamp: new Date().toISOString()
+    });
+  },
+
+  // Track when user saves a trip
+  trackSaveTrip: (data: { destination: string; duration: number; language: string }) => {
+    mixpanel.track('Save Trip', {
+      ...data,
+      timestamp: new Date().toISOString()
     });
   },
 

@@ -103,7 +103,7 @@ export default function SharedTrip() {
 
   return (
     <div className="min-h-screen bg-background font-sans antialiased">
-      <Header language={language} onLanguageChange={handleLanguageChange} />
+      <Header language={language} />
       <div className="container max-w-4xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between my-4">
           <div className="flex items-center gap-2">

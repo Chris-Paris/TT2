@@ -22,7 +22,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Trip } from '@/types/supabase';
-import { TravelSuggestions } from '@/types';
 import { Footer } from '@/components/Footer';
 import { Header } from '@/components/Header';
 
@@ -141,7 +140,7 @@ export default function MyTrips() {
 
   return (
     <div className="min-h-screen bg-background font-sans antialiased">
-      <Header language={language} onLanguageChange={handleLanguageChange} />
+      <Header language={language} />
       <div className="container max-w-4xl mx-auto px-4 py-8">
         <div className="flex items-center mb-6">
           <Button 
@@ -175,7 +174,10 @@ export default function MyTrips() {
                 </CardHeader>
                 <CardContent className="pb-2">
                   <p className="text-sm text-muted-foreground line-clamp-3">
-                    {((trip.data as unknown as TravelSuggestions)?.practicalAdvice?.substring(0, 120) || 'No description')}...
+                    {(trip.data && 
+                      (trip.data as any).practicalAdvice ? 
+                      (trip.data as any).practicalAdvice.substring(0, 120) : 
+                      'No description')}...
                   </p>
                 </CardContent>
                 <CardFooter className="flex justify-between">

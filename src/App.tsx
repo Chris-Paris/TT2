@@ -85,7 +85,6 @@ function Home() {
     try {
       const result = await generateTravelPlan({
         destination: data.destination,
-        date: data.date,
         duration: data.duration,
         interests: data.interests,
         language: language
@@ -132,8 +131,8 @@ function Home() {
 
   return (
     <div className="min-h-screen bg-background font-sans antialiased">
-      <Header language={language} onLanguageChange={handleLanguageChange} />
-      <main className="container max-w-4xl mx-auto px-4 py-0">
+      <Header language={language} />
+      <main className="container max-w-lg lg:max-w-7xl mx-auto px-4 py-0">
         {suggestions ? (
           <TravelResults
             suggestions={suggestions}

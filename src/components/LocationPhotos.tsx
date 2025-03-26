@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
 
 const FLICKR_API_KEY = '4306b70370312d7ccde3304184179b2b';
 
@@ -7,7 +6,6 @@ interface LocationPhotosProps {
   location: string;
   coordinates?: { lat: number; lng: number };
   language: string;
-  autoLoad?: boolean;
 }
 
 async function fetchFlickrPhotos(searchTerm: string, coordinates?: { lat: number; lng: number }): Promise<string[]> {
@@ -45,15 +43,13 @@ async function fetchFlickrPhotos(searchTerm: string, coordinates?: { lat: number
   }
 }
 
-export function LocationPhotos({ location, coordinates, language, autoLoad = false }: LocationPhotosProps) {
+export function LocationPhotos({ location, coordinates, language }: LocationPhotosProps) {
   const [photos, setPhotos] = useState<string[]>([]);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoadedPhotos, setHasLoadedPhotos] = useState(false);
 
   const loadPhotos = async () => {
     if (hasLoadedPhotos) {
-      setIsExpanded(!isExpanded);
       return;
     }
 
@@ -62,7 +58,6 @@ export function LocationPhotos({ location, coordinates, language, autoLoad = fal
       const photos = await fetchFlickrPhotos(location, coordinates);
       setPhotos(photos);
       setHasLoadedPhotos(true);
-      setIsExpanded(true);
     } catch (err) {
       console.error('Failed to load photos:', err);
       setPhotos([]);
@@ -72,28 +67,13 @@ export function LocationPhotos({ location, coordinates, language, autoLoad = fal
   };
 
   useEffect(() => {
-    if (autoLoad && !hasLoadedPhotos && !isLoading) {
+    if (!hasLoadedPhotos && !isLoading) {
       loadPhotos();
     }
-  }, [autoLoad, hasLoadedPhotos, isLoading]);
+  }, [hasLoadedPhotos, isLoading]);
 
   return (
     <div className="flex-1">
-      <button
-        onClick={loadPhotos}
-        disabled={isLoading}
-        className="flex items-center text-sm font-bold text-[#d99a08] hover:text-[#d99a08]/80 transition-colors"
-      >
-        <span className="mr-1">
-          {isExpanded ? (language === 'fr' ? 'Masquer les photos' : 'Hide Photos') : (language === 'fr' ? 'Voir les photos' : 'See Photos')}
-        </span>
-        {isExpanded ? (
-          <ChevronUp className="w-4 h-4 text-[#d99a08]" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-[#d99a08]" />
-        )}
-      </button>
-
       {isLoading && (
         <div className="flex items-center text-sm text-gray-500">
           <span className="mr-1">
@@ -103,7 +83,7 @@ export function LocationPhotos({ location, coordinates, language, autoLoad = fal
         </div>
       )}
 
-      {isExpanded && photos.length > 0 && (
+      {photos.length > 0 && (
         <div className="mt-2 flex flex-row gap-2 overflow-x-auto pb-2">
           {photos.slice(0, 5).map((photo, index) => (
             <img
