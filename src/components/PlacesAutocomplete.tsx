@@ -72,13 +72,29 @@ export function PlacesAutocomplete({
   };
 
   const formatLocationName = (result: NominatimResult): string => {
-    if (!result.address) return result.display_name;
+    if (!result.address) {
+      // Keep the full city name before the first comma
+      const parts = result.display_name.split(',').map(part => part.trim());
+      if (parts.length > 1) {
+        const cityName = parts[0];
+        const lastWord = parts[parts.length - 1].split(' ').pop() || '';
+        return `${cityName}, ${lastWord}`;
+      }
+      return result.display_name;
+    }
     
     const place = result.address.city || result.address.town || result.address.village;
     const country = result.address.country;
     
     if (place && country) {
-      return `${place}, ${country}`;
+      // Keep the full city name as it is
+      const placeParts = place.split(',').map(part => part.trim());
+      const countryParts = country.split(',').map(part => part.trim());
+      
+      const placeName = placeParts[0];
+      const countryLastWord = countryParts[countryParts.length - 1].split(' ').pop() || '';
+      
+      return `${placeName}, ${countryLastWord}`;
     }
     
     return result.display_name;

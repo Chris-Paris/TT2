@@ -169,12 +169,12 @@ export function NavigationBar({ language, suggestions, startDate }: NavigationBa
 
   return (
     <div 
-      className={`overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 sticky top-0 bg-white z-50 shadow-sm py-2 no-scrollbar lg:custom-scrollbar transition-transform duration-300 ${
+      className={`w-full overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 sticky top-0 bg-white z-50 shadow-sm py-2 no-scrollbar lg:custom-scrollbar transition-transform duration-300 ${
         isVisible ? 'translate-y-0' : '-translate-y-full'
       }`} 
       ref={navContainerRef}
     >
-      <div className="flex gap-4 min-w-max">
+      <div className="flex gap-4 min-w-max w-full justify-start">
         {renderDayButtons()}
       </div>
     </div>

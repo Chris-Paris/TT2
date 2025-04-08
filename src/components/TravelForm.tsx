@@ -161,38 +161,101 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
   };
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6 lg:space-y-5 max-w-lg lg:max-w-7xl mx-auto pt-0">
-      {/* Background video section with title overlay */}
-      <div className="relative w-full" style={{ height: "300px" }}>
-        {/* Background video */}
-        <InspirationPhotos isVisible={showInspirationPhotos} language={language} backgroundMode={true} />
-        
-        {/* Content that goes on top of the video */}
-        <div className="relative z-10 h-full flex flex-col justify-center">
-          <h1 className="text-white text-4xl lg:text-5xl font-bold text-center mb-4 text-shadow-sm">
-            {language === 'en' 
-              ? 'Your trip planned in one minute.'
-              : 'Votre voyage planifié en une minute.'}
-          </h1>
-          <div className="relative flex items-center justify-center overflow-hidden mt-1.5">
-            <h2 className="text-xl lg:text-2xl font-semibold text-center text-white [animation:pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] text-shadow-sm">
-            {language === 'en'
-              ? 'Skip the endless searching. Get a personalized itinerary in few clicks planned by AI !'
-              : 'Évitez les recherches interminables. Obtenez un itinéraire planifié en quelques clics avec l\'IA !'}
-            </h2>
+    <div className="flex flex-col gap-4 mb-5">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6 lg:space-y-5 max-w-lg lg:max-w-7xl mx-auto pt-0">
+        {/* Background video section with title overlay */}
+        <div className="relative w-full" style={{ height: "300px" }}>
+          {/* Background video */}
+          <InspirationPhotos isVisible={showInspirationPhotos} language={language} backgroundMode={true} />
+          
+          {/* Content that goes on top of the video */}
+          <div className="relative z-10 h-full flex flex-col justify-center">
+            <h1 className="text-white text-4xl lg:text-5xl font-bold text-center mb-4 text-shadow-sm">
+              {language === 'en' 
+                ? 'Your trip planned in one minute.'
+                : 'Votre voyage planifié en une minute.'}
+            </h1>
+            <div className="relative flex items-center justify-center overflow-hidden mt-1.5">
+              <h2 className="text-xl lg:text-2xl font-semibold text-center text-white [animation:pulse_3s_cubic-bezier(0.4,0,0.6,1)_infinite] text-shadow-sm">
+              {language === 'en'
+                ? 'Skip the endless searching. Get a personalized itinerary in few clicks planned by AI !'
+                : 'Évitez les recherches interminables. Obtenez un itinéraire planifié en quelques clics avec l\'IA !'}
+              </h2>
+            </div>
+            {/* Destination ideas button placed below H2 text and styled white */}
+            <div className="flex justify-center mt-6">
+              <button
+                type="button"
+                className="text-white text-lg lg:text-xl text-center hover:opacity-80 transition-opacity duration-200 flex items-center gap-2 underline underline-offset-4"
+                onClick={() => {
+                  document.getElementById('destination-ideas-trigger')?.click();
+                }}
+              >
+                <span>{language === 'en' ? 'Destination Ideas' : 'Idées de destinations'}</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              <div className="hidden">
+                <WhereToGo 
+                  language={language} 
+                  onDestinationSelect={(destination) => {
+                    form.setValue('destination', destination);
+                  }}
+                  id="destination-ideas-trigger"
+                />
+              </div>
+            </div>
           </div>
-          {/* Destination ideas button placed below H2 text and styled white */}
-          <div className="flex justify-center mt-6">
-            <button
-              type="button"
-              className="text-white text-lg lg:text-xl text-center hover:opacity-80 transition-opacity duration-200 flex items-center gap-2 underline underline-offset-4"
-              onClick={() => {
-                document.getElementById('destination-ideas-trigger')?.click();
-              }}
-            >
-              <span>{language === 'en' ? 'Destination Ideas' : 'Idées de destinations'}</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
+        </div>
+
+        {/* Unified Search Bar */}
+        <div className="flex flex-col lg:mx-32 lg:mt-2">
+          <div className="flex-1">
+            <div className="bg-[#5f9585] rounded-lg p-2">
+              <div className="flex flex-row gap-3">
+                <div className="flex-[2]">
+                  <label className="block text-sm font-medium text-white">
+                    {language === 'en' ? 'Where are you going?' : 'Où voulez-vous aller?'}
+                  </label>
+                  <div className="mt-1">
+                    <PlacesAutocomplete
+                      register={form.register}
+                      setValue={form.setValue}
+                      language={language}
+                      onFocus={() => {}}
+                      onBlur={() => {}}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex-[1]">
+                  <label className="block text-sm font-medium text-white">
+                    {language === 'en' ? 'Duration' : 'Durée'}
+                  </label>
+                  <div className="mt-1">
+                    <select
+                      {...form.register('duration', { valueAsNumber: true })}
+                      className="w-full h-10 border rounded-lg bg-white shadow-sm hover:border-gray-300 focus:border-[#d99a08] focus:ring-2 focus:ring-[#d99a08]/20 transition-all duration-200"
+                      defaultValue="3"
+                    >
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((days) => (
+                        <option key={days} value={days}>
+                          {days} {language === 'en' ? (days === 1 ? 'day' : 'days') : (days === 1 ? 'jour' : 'jours')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {form.formState.errors.destination && (
+              <p className="text-red-500 text-sm mt-2">
+                {form.formState.errors.destination.message}
+              </p>
+            )}
+          </div>
+
+          <div className="flex justify-center">
             <div className="hidden">
               <WhereToGo 
                 language={language} 
@@ -204,76 +267,49 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Unified Search Bar */}
-      <div className="flex flex-col lg:mx-32 lg:mt-2">
-        <div className="flex-1">
-          <div className="bg-[#5f9585] rounded-lg p-2">
-            <div className="flex flex-row gap-3">
-              <div className="flex-[2]">
-                <label className="block text-sm font-medium text-white">
-                  {language === 'en' ? 'Where are you going?' : 'Où voulez-vous aller?'}
-                </label>
-                <div className="mt-1">
-                  <PlacesAutocomplete
-                    register={form.register}
-                    setValue={form.setValue}
-                    language={language}
-                    onFocus={() => {}}
-                    onBlur={() => {}}
-                  />
-                </div>
-              </div>
-
-              <div className="flex-[1]">
-                <label className="block text-sm font-medium text-white">
-                  {language === 'en' ? 'Duration' : 'Durée'}
-                </label>
-                <div className="mt-1">
-                  <select
-                    {...form.register('duration', { valueAsNumber: true })}
-                    className="w-full h-10 border rounded-lg bg-white shadow-sm hover:border-gray-300 focus:border-[#d99a08] focus:ring-2 focus:ring-[#d99a08]/20 transition-all duration-200"
-                    defaultValue="3"
+        <div>
+          <label className="block text-m font-bold text-[#5f9585] p-2">
+            {language === 'en' ? 'Your interests' : 'Vos centres d\'intérêt'}
+          </label>
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap gap-2.5">
+              {initialInterests.map((interest) => {
+                const inputId = `interest-${interest}`;
+                return (
+                  <label
+                    key={interest}
+                    htmlFor={inputId}
+                    className={`inline-flex items-center cursor-pointer group`}
                   >
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((days) => (
-                      <option key={days} value={days}>
-                        {days} {language === 'en' ? (days === 1 ? 'day' : 'days') : (days === 1 ? 'jour' : 'jours')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                    <input
+                      type="checkbox"
+                      id={inputId}
+                      {...form.register('interests')}
+                      value={interest}
+                      className="sr-only peer"
+                    />
+                    <div className={`px-3 py-2 rounded-full border-2 border-[#5f9585] bg-white text-[#5f9585]
+                      peer-checked:bg-[#5f9585] peer-checked:text-white peer-checked:border-[#5f9585] peer-checked:shadow-md
+                      hover:border-[#5f9585] hover:border-opacity-70 hover:shadow-sm transition-all duration-200`}>
+                      {interestTranslations[interest][language]}
+                    </div>
+                  </label>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setShowMoreInterests(!showMoreInterests)}
+                className="px-3 py-2 rounded-full border-2 border-[#5f9585] bg-white text-[#5f9585] hover:bg-[#5f9585]/5 transition-colors"
+              >
+                {showMoreInterests 
+                  ? (language === 'en' ? 'Show Less' : 'Voir Moins') 
+                  : (language === 'en' ? 'More Options' : 'Plus d\'Options')}
+              </button>
             </div>
-          </div>
-
-          {form.formState.errors.destination && (
-            <p className="text-red-500 text-sm mt-2">
-              {form.formState.errors.destination.message}
-            </p>
-          )}
-        </div>
-
-        <div className="flex justify-center">
-          <div className="hidden">
-            <WhereToGo 
-              language={language} 
-              onDestinationSelect={(destination) => {
-                form.setValue('destination', destination);
-              }}
-              id="destination-ideas-trigger"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-m font-bold text-[#5f9585] p-2">
-          {language === 'en' ? 'Your interests' : 'Vos centres d\'intérêt'}
-        </label>
-        <div className="space-y-2.5">
-          <div className="flex flex-wrap gap-2.5">
-            {initialInterests.map((interest) => {
+            {showMoreInterests && (
+            <div className="flex flex-wrap gap-2.5">
+              {hiddenInterests.map((interest) => {
               const inputId = `interest-${interest}`;
               return (
                 <label
@@ -295,64 +331,66 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
                   </div>
                 </label>
               );
-            })}
-            <button
-              type="button"
-              onClick={() => setShowMoreInterests(!showMoreInterests)}
-              className="px-3 py-2 rounded-full border-2 border-[#5f9585] bg-white text-[#5f9585] hover:bg-[#5f9585]/5 transition-colors"
-            >
-              {showMoreInterests 
-                ? (language === 'en' ? 'Show Less' : 'Voir Moins') 
-                : (language === 'en' ? 'More Options' : 'Plus d\'Options')}
-            </button>
+              })}
+            </div>
+            )}
           </div>
-          {showMoreInterests && (
-          <div className="flex flex-wrap gap-2.5">
-            {hiddenInterests.map((interest) => {
-            const inputId = `interest-${interest}`;
-            return (
-              <label
-                key={interest}
-                htmlFor={inputId}
-                className={`inline-flex items-center cursor-pointer group`}
-              >
-                <input
-                  type="checkbox"
-                  id={inputId}
-                  {...form.register('interests')}
-                  value={interest}
-                  className="sr-only peer"
-                />
-                <div className={`px-3 py-2 rounded-full border-2 border-[#5f9585] bg-white text-[#5f9585]
-                  peer-checked:bg-[#5f9585] peer-checked:text-white peer-checked:border-[#5f9585] peer-checked:shadow-md
-                  hover:border-[#5f9585] hover:border-opacity-70 hover:shadow-sm transition-all duration-200`}>
-                  {interestTranslations[interest][language]}
-                </div>
-              </label>
-            );
-            })}
-          </div>
+          {form.formState.errors.interests && (
+            <p className="text-red-500 text-sm mt-2">
+              {form.formState.errors.interests.message}
+            </p>
           )}
         </div>
-        {form.formState.errors.interests && (
-          <p className="text-red-500 text-sm mt-2">
-            {form.formState.errors.interests.message}
-          </p>
-        )}
-      </div>
 
-      <div className="flex gap-4 pt-4">
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="px-6 py-3 bg-[#d99a08] text-white rounded-lg hover:bg-[#d99a08]/90 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 flex-1 text-base font-medium"
-        >
-          <div className="flex items-center justify-center gap-2">
-            {isLoading ? (
-              <span className="flex items-center gap-2"><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>{language === 'en' ? 'Generating...' : 'Génération...'}</span>
-            ) : (
-              <>
-                <span>{language === 'en' ? 'Generate with AI' : 'Générer mon voyage'}</span>
+        <div className="flex gap-4 pt-4">
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="px-6 py-3 bg-[#d99a08] text-white rounded-lg hover:bg-[#d99a08]/90 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 flex-1 text-base font-medium"
+          >
+            <div className="flex items-center justify-center gap-2">
+              {isLoading ? (
+                <span className="flex items-center gap-2"><span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>{language === 'en' ? 'Generating...' : 'Génération...'}</span>
+              ) : (
+                <>
+                  <span>{language === 'en' ? 'Generate with AI' : 'Générer mon voyage'}</span>
+                  <svg 
+                    width="16" 
+                    height="16" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12h14m-7-7 7 7-7 7"/>
+                  </svg>
+                </>
+              )}
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              form.reset();
+              onReset();
+            }}
+            className="px-6 py-3 border-2 border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-all duration-200 text-base font-medium"
+          >
+            {language === 'en' ? 'Reset' : 'Réinitialiser'}
+          </button>
+        </div>
+
+        {(!isLoading && !hasResults) ? (
+          <>
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => setIsGifExpanded(!isGifExpanded)}
+                className="text-black text-lg text-xl text-center hover:opacity-80 transition-opacity duration-200 flex items-center gap-3 underline underline-offset-4"
+              >
+                <span>{language === 'en' ? 'How does it work' : 'Comment ça marche'}</span>
                 <svg 
                   width="16" 
                   height="16" 
@@ -365,131 +403,95 @@ export function TravelForm({ onSubmit, isLoading, language, onReset, hasResults 
                 >
                   <path d="M5 12h14m-7-7 7 7-7 7"/>
                 </svg>
-              </>
-            )}
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            form.reset();
-            onReset();
-          }}
-          className="px-6 py-3 border-2 border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-all duration-200 text-base font-medium"
-        >
-          {language === 'en' ? 'Reset' : 'Réinitialiser'}
-        </button>
-      </div>
-
-      {(!isLoading && !hasResults) ? (
-        <>
-          <div className="flex justify-center mt-4">
-            <button
-              type="button"
-              onClick={() => setIsGifExpanded(!isGifExpanded)}
-              className="text-black text-lg lg:text-xl text-center hover:opacity-80 transition-opacity duration-200 flex items-center gap-2 underline underline-offset-4"
-            >
-              <span>{language === 'en' ? 'How does it work' : 'Comment ça marche'}</span>
-              <svg 
-                width="16" 
-                height="16" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-              >
-                <path d="M5 12h14m-7-7 7 7-7 7"/>
-              </svg>
-            </button>
-          </div>
-
-          {isGifExpanded && (
-            <div className="mt-4 flex justify-center w-full overflow-hidden transition-all duration-300">
-              <div style={{ width: '1500px', position: 'relative', paddingTop: '506.25px' }}>
-                <img 
-                  src="https://s3.gifyu.com/images/bS9jR.gif" 
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'contain' }}
-                  alt="Travel animation"
-                />
-              </div>
+              </button>
             </div>
-          )}
 
-          <div className="mt-8 lg:mt-10 w-full max-w-1280 lg:max-w-1280 mx-auto bg-[#FDF0D5] rounded-lg p-6">
-            <h3 className="text-xl lg:text-2xl font-bold text-center mb-6">
-              {language === 'en' ? 'What our travelers say' : 'Ce que disent nos voyageurs'}
-            </h3>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {recommendations[language].map((rec, index) => (
-                <div
-                  key={index}
-                  className="bg-white p-6 rounded-lg shadow-lg flex flex-col relative transform transition-all duration-300 hover:scale-105"
-                >
-                  <div className="absolute -top-3 left-6 bg-[#d99a08] text-white px-4 py-1 rounded-full text-sm">
-                    {language === 'en' ? 'Verified Trip' : 'Voyage Vérifié'}
-                  </div>
-                 <div className="flex flex-col gap-4">
-                    <img
-                      src={index === 0 
-                        ? "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg" // Sarah
-                        : index === 1
-                        ? "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" // Michael 
-                        : "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg" // Emma
-                      }
-                      alt={rec.name}
-                     className="w-16 h-16 rounded-full object-cover mx-auto"
-                    />
-                   <div className="text-center">
-                     <h4 className="font-semibold text-lg mb-3">{rec.name}</h4>
-                     <p className="text-gray-600 leading-relaxed">{rec.description}</p>
-                      <div className="flex items-center mt-4 text-[#d99a08]">
-                        <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
+            {isGifExpanded && (
+              <div className="mt-4 flex justify-center w-full overflow-hidden transition-all duration-300">
+                <div style={{ width: '1500px', position: 'relative', paddingTop: '506.25px' }}>
+                  <img 
+                    src="https://s3.gifyu.com/images/bS9jR.gif" 
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'contain' }}
+                    alt="Travel animation"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-8 lg:mt-10 w-full max-w-1280 lg:max-w-1280 mx-auto bg-[#FDF0D5] rounded-lg p-6">
+              <h3 className="text-xl lg:text-2xl font-bold text-center mb-6">
+                {language === 'en' ? 'What our travelers say' : 'Ce que disent nos voyageurs'}
+              </h3>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {recommendations[language].map((rec, index) => (
+                  <div
+                    key={index}
+                    className="bg-white p-6 rounded-lg shadow-lg flex flex-col relative transform transition-all duration-300 hover:scale-105"
+                  >
+                    <div className="absolute -top-3 left-6 bg-white text-[#d99a08] border-2 border-[#d99a08] px-4 py-1 rounded-full text-sm">
+                      {language === 'en' ? 'Verified Trip' : 'Voyage Vérifié'}
+                    </div>
+                   <div className="flex flex-col gap-4">
+                      <img
+                        src={index === 0 
+                          ? "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg" // Sarah
+                          : index === 1
+                          ? "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" // Michael 
+                          : "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg" // Emma
+                        }
+                        alt={rec.name}
+                       className="w-16 h-16 rounded-full object-cover mx-auto"
+                      />
+                     <div className="text-center">
+                       <h4 className="font-semibold text-lg mb-3">{rec.name}</h4>
+                       <p className="text-gray-600 leading-relaxed">{rec.description}</p>
+                        <div className="flex items-center mt-4 text-[#d99a08]">
+                          <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                          <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                          <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                          <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                          <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="text-center mt-8 text-gray-600">
+                <p className="font-medium">
+                  {language === 'en' 
+                    ? '1000+ travelers have planned their perfect trip with TravellingTrip' 
+                      : 'Plus de 1000 voyageurs ont planifié leur voyage parfait avec TravellingTrip'}
+                </p>
+              </div>
             </div>
-            <div className="text-center mt-8 text-gray-600">
-              <p className="font-medium">
-                {language === 'en' 
-                  ? '1000+ travelers have planned their perfect trip with TravellingTrip' 
-                    : 'Plus de 1000 voyageurs ont planifié leur voyage parfait avec TravellingTrip'}
-              </p>
-            </div>
-          </div>
 
-          <div className="mt-8 lg:mt-10">
-            <iframe
-              className="w-full"
-              height="250"
-              src="https://www.trip.com/partners/ad/SB1313692?Allianceid=5922575&SID=165091732&trip_sub1="
-              frameBorder="0"
-              scrolling="no"
-            />
+            <div className="mt-8 lg:mt-10">
+              <iframe
+                className="w-full"
+                height="250"
+                src="https://www.trip.com/partners/ad/SB1313692?Allianceid=5922575&SID=165091732&trip_sub1="
+                frameBorder="0"
+                scrolling="no"
+              />
+            </div>
+          </>
+        ) : isLoading ? (
+          <div className="mt-8 text-center text-lg text-gray-600 animate-pulse max-w-2xl mx-auto">
+            {loadingDisplayText}
           </div>
-        </>
-      ) : isLoading ? (
-        <div className="mt-8 text-center text-lg text-gray-600 animate-pulse max-w-2xl mx-auto">
-          {loadingDisplayText}
-        </div>
-      ) : null}
-    </form>
+        ) : null}
+      </form>
+    </div>
   );
 }

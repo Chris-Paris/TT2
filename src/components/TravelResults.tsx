@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronUp, Map, MapPin, Loader2, Plus, Info, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronUp, Map, MapPin, Loader2, Info, ExternalLink } from 'lucide-react';
 import { TravelSuggestions } from '@/types';
 import { LocationPhotos } from './LocationPhotos';
 import { DynamicMap } from './DynamicMap';
 import { ArrangeItems } from './ui/ArrangeItems';
-import { Button } from './ui/button';
+import { AddToItinerary } from './ui/AddToItinerary';
 import { AddDate } from './ui/AddDate';
 import { format, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -19,6 +19,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { saveTrip } from '@/lib/tripService';
 import { PlaceCard } from './ui/PlaceCard';
 import { BottomNavBar } from './ui/BottomNavBar';
+import { ActivityIdeasInterests } from './ui/ActivityIdeasInterests';
 
 interface TravelResultsProps {
   suggestions: TravelSuggestions;
@@ -85,8 +86,7 @@ function TravelResults({
     accommodation: true
   });
   
-  // Add view mode state
-  const [viewMode, setViewMode] = useState<'itinerary' | 'places'>('itinerary');
+  const [viewMode, setViewMode] = useState<'itinerary' | 'places' | 'activities'>('itinerary');
   const [additionalAttractions, setAdditionalAttractions] = useState<any[]>([]);
   const [additionalGems, setAdditionalGems] = useState<any[]>([]);
   const [additionalActivities, setAdditionalActivities] = useState<any[]>([]);
@@ -96,27 +96,53 @@ function TravelResults({
     activities: false,
   });
   const [itineraryActivities, setItineraryActivities] = useState<{ [key: number]: string[] }>({});
+  const [activityInterests, setActivityInterests] = useState<string>('');
+  const [activityResults, setActivityResults] = useState<any[]>([]);
+  const [isActivityResultsLoading, setIsActivityResultsLoading] = useState<boolean>(false);
   const resultsTitleRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isMapExpanded, setIsMapExpanded] = useState(() => {
-    // Check if we're on desktop using window width
-    return window.innerWidth >= 1024; // 1024px is the 'lg' breakpoint in Tailwind
+    return window.innerWidth >= 1024; 
   });
   const [isFullscreenMap, setIsFullscreenMap] = useState(false);
-  const [itineraryMapItems, setItineraryMapItems] = useState<any[]>([]);
   const [suggestionsState, setSuggestionsState] = useState<TravelSuggestions>(suggestions);
   const [startDate, setStartDate] = useState<Date | null>(null);
+  const [activityThumbnails, setActivityThumbnails] = useState<Record<string, string | null>>({});
 
-  // Ensure we have valid suggestions before accessing properties
+  const saveThumbnail = (activity: string, url: string | null) => {
+    setActivityThumbnails(prev => ({
+      ...prev,
+      [activity]: url
+    }));
+  };
+
+  const getActivityThumbnail = (activity: string) => {
+    return activityThumbnails[activity] || null;
+  };
+
+  // Save thumbnails when component unmounts
+  useEffect(() => {
+    return () => {
+      // Save thumbnails to localStorage
+      localStorage.setItem('activityThumbnails', JSON.stringify(activityThumbnails));
+    };
+  }, [activityThumbnails]);
+
+  // Load thumbnails from localStorage when component mounts
+  useEffect(() => {
+    const savedThumbnails = localStorage.getItem('activityThumbnails');
+    if (savedThumbnails) {
+      setActivityThumbnails(JSON.parse(savedThumbnails));
+    }
+  }, []);
+
   if (!suggestionsState || !suggestionsState.itinerary) {
     return null;
   }
 
   useEffect(() => {
     analytics.trackViewTravelResults(destination);
-    // Initialize itinerary activities from suggestions
     const initialActivities = (suggestionsState.itinerary || []).reduce((acc, day) => {
-      // Convert the new activity structure to formatted strings for backward compatibility
       const formattedActivities = day.activities.map(activity => {
         return `${activity.activity} at ${activity.place}` +
                (activity.nearbyLandmarks && activity.nearbyLandmarks.length > 0 ? 
@@ -136,17 +162,6 @@ function TravelResults({
   }, [suggestions]);
 
   const handleShareClick = async () => {
-    if (!user || !isSubscribed) {
-      toast({
-        title: language === 'en' ? 'Login Required' : 'Connexion Requise',
-        description: language === 'en'
-          ? 'Please login to share your trip'
-          : 'Veuillez vous connecter pour partager votre voyage',
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       const formattedText = formatTravelPlanForSharing(suggestionsState, language);
       const success = await shareContent(formattedText);
@@ -155,21 +170,21 @@ function TravelResults({
       
       if (success) {
         toast({
-          title: "Copied!",
-          description: "Link copied to clipboard"
+          title: language === 'en' ? "Shared!" : "Partagé!",
+          description: language === 'en' ? "Your itinerary has been shared" : "Votre itinéraire a été partagé"
         });
       } else {
         toast({
-          title: "Error",
-          description: "Failed to copy link",
+          title: language === 'en' ? "Error" : "Erreur",
+          description: language === 'en' ? "Failed to share itinerary" : "Échec du partage de l'itinéraire",
           variant: "destructive"
         });
       }
     } catch (error) {
       console.error('Error sharing:', error);
       toast({
-        title: "Error",
-        description: "Failed to share",
+        title: language === 'en' ? "Error" : "Erreur",
+        description: language === 'en' ? "Failed to share" : "Échec du partage",
         variant: "destructive"
       });
     }
@@ -266,41 +281,16 @@ function TravelResults({
     }
   };
 
-  const handleAddToItinerary = (title: string, description: string) => {
-    // Track the "Add to Itinerary" button click in Mixpanel
-    analytics.trackAddToItinerary(destination, title);
-    
-    setItineraryActivities(prev => {
-      const newActivities = { ...prev };
-      const lastDay = Math.max(...Object.keys(prev).map(Number));
-      const currentDayActivities = prev[lastDay] || [];
-      
-      // Format the new activity with the title and description
-      const newActivity = `${title} - ${description}`;
-      
-      newActivities[lastDay] = [...currentDayActivities, newActivity];
-      return newActivities;
-    });
-    
-    toast({
-      title: language === 'fr' ? "Ajouté à l'itinéraire" : "Added to Itinerary",
-      description: language === 'fr' ? "Élément ajouté au dernier jour de votre itinéraire" : "Item added to the last day of your itinerary",
-    });
-  };
-
   const handleCrossDayMove = (sourceDayIndex: number, targetDayIndex: number, sourceIndex: number, targetIndex: number) => {
     setItineraryActivities(prev => {
       const newActivities = { ...prev };
       const sourceDayActivities = [...prev[sourceDayIndex]];
       const targetDayActivities = [...(prev[targetDayIndex] || [])];
       
-      // Get the activity to move
       const [movedActivity] = sourceDayActivities.splice(sourceIndex, 1);
       
-      // Insert the activity at the target position
       targetDayActivities.splice(targetIndex, 0, movedActivity);
       
-      // Update both days
       newActivities[sourceDayIndex] = sourceDayActivities;
       newActivities[targetDayIndex] = targetDayActivities;
       
@@ -313,10 +303,8 @@ function TravelResults({
       const newActivities = { ...prev };
       const dayActivities = [...prev[dayIndex]];
       
-      // Remove the activity at the specified index
       dayActivities.splice(activityIndex, 1);
       
-      // If there are no more activities for this day, remove the day
       if (dayActivities.length === 0) {
         delete newActivities[dayIndex];
       } else {
@@ -334,9 +322,7 @@ function TravelResults({
     );
   };
 
-  // Function to extract activity information from a formatted activity string or activity object
   const extractActivityInfo = (activity: string | any) => {
-    // If activity is already an object with the required properties, use it directly
     if (typeof activity !== 'string' && activity.activity && activity.place) {
       return {
         title: activity.place,
@@ -348,10 +334,8 @@ function TravelResults({
       };
     }
     
-    // Otherwise, treat it as a string
     let activityText = typeof activity === 'string' ? activity : `${activity.activity} at ${activity.place}`;
     
-    // Remove any HTML tags
     activityText = activityText.replace(/<\/?[^>]+(>|$)/g, "");
     
     let title = '';
@@ -361,40 +345,32 @@ function TravelResults({
     let travelTime: string | null = null;
     let bookingInfo: string | null = null;
     
-    // Extract place name from the activity text
-    // Try to extract time and place information
     const timeMatch = activityText.match(/(\w+):\s*(\d+[h:]\d+)\s*-\s*(.*)/);
     if (timeMatch && timeMatch[3]) {
-      // If we have a time format, use the part after the time as title
       title = timeMatch[3].trim();
       description = activityText;
     } else {
-      // Otherwise try to split by "at" to get the activity and place
       const atMatch = activityText.match(/(.*) at (.*?)(?:\s+\(Near:|$|\s+-)/);
       if (atMatch && atMatch[1] && atMatch[2]) {
         title = atMatch[1].trim();
         destination = atMatch[2].trim();
         description = activityText;
       } else {
-        // Fallback to the full text
         title = activityText;
         description = '';
       }
     }
     
-    // Extract nearby landmarks if present
     const landmarksMatch = activityText.match(/Near: (.*?)(?:\)|$)/);
     if (landmarksMatch && landmarksMatch[1]) {
       nearbyLandmarks = landmarksMatch[1].split(',').map(l => l.trim());
     }
     
-    // Extract travel time if present
     const travelTimeMatch = activityText.match(/- (.*? from previous location)/);
     if (travelTimeMatch && travelTimeMatch[1]) {
       travelTime = travelTimeMatch[1];
     }
     
-    // Extract booking info if present
     const bookingMatch = activityText.match(/Book at: (.*?)(?:$|\s+-)/);
     if (bookingMatch && bookingMatch[1]) {
       bookingInfo = bookingMatch[1].trim();
@@ -410,77 +386,11 @@ function TravelResults({
     };
   };
 
-  // Extract coordinates from activity title by looking up in attractions and hidden gems
-  const findCoordinatesForActivity = (activityTitle: string) => {
-    // First check in mustSeeAttractions
-    const attraction = suggestionsState.mustSeeAttractions.find(
-      item => item.title.toLowerCase().includes(activityTitle.toLowerCase()) || 
-             activityTitle.toLowerCase().includes(item.title.toLowerCase())
-    );
-    if (attraction?.coordinates) return attraction.coordinates;
-
-    // Then check in hiddenGems
-    const gem = suggestionsState.hiddenGems.find(
-      item => item.title.toLowerCase().includes(activityTitle.toLowerCase()) || 
-             activityTitle.toLowerCase().includes(item.title.toLowerCase())
-    );
-    if (gem?.coordinates) return gem.coordinates;
-
-    // If no match found, return destination coordinates as fallback
-    return suggestionsState.destination.coordinates;
-  };
-
-  // Prepare itinerary items for map display
-  const prepareItineraryMapItems = () => {
-    const items: any[] = [];
-    let globalIndex = 0;
-    let continuousIndex = 1; // Start from 1 for continuous numbering
-
-    // Debug: Log the itinerary activities
-    console.log('Itinerary activities:', itineraryActivities);
-    
-    // Sort the days numerically to ensure proper order
-    const sortedDays = Object.keys(itineraryActivities)
-      .map(day => parseInt(day))
-      .filter(day => !isNaN(day))
-      .sort((a, b) => a - b);
-    
-    // Process each day in order
-    sortedDays.forEach(day => {
-      const dayActivities = itineraryActivities[day] || [];
-      
-      // Add each activity for this day
-      dayActivities.forEach((activity, localIndex) => {
-        const activityInfo = extractActivityInfo(activity);
-        const coordinates = findCoordinatesForActivity(activityInfo.title);
-        
-        items.push({
-          day: day,
-          index: localIndex,
-          displayIndex: continuousIndex++, // Use a simple continuous counter starting from 1
-          title: activityInfo.title,
-          description: activityInfo.description,
-          location: activityInfo.destination,
-          coordinates
-        });
-        
-        globalIndex++;
-      });
-    });
-
-    console.log('Prepared map items:', items);
-    setItineraryMapItems(items);
-  };
-
   const handleMapButtonClick = () => {
-    if (!isMapExpanded) {
-      // If map is not expanded, expand it normally
-      prepareItineraryMapItems(); // Prepare map items before showing the map
-      setIsMapExpanded(true);
-    } else {
-      // If map is already expanded, toggle fullscreen mode
-      prepareItineraryMapItems();
+    if (isMapExpanded) {
       setIsFullscreenMap(!isFullscreenMap);
+    } else {
+      setIsMapExpanded(true);
     }
   };
 
@@ -526,7 +436,6 @@ function TravelResults({
                 </div>
                 <div className="p-3 lg:p-4 space-y-8">
                   {suggestionsState.itinerary.map((day, dayIdx) => {
-                    // Calculate the starting index for this day based on previous days
                     const startingIndex = suggestionsState.itinerary
                       .slice(0, dayIdx)
                       .reduce((sum, prevDay) => sum + (itineraryActivities[prevDay.day]?.length || 0), 0);
@@ -560,7 +469,6 @@ function TravelResults({
                           renderItem={(activity: string) => {
                             const activityInfo = extractActivityInfo(activity);
                             
-                            // Find the matching activity in the itinerary data from OpenAI
                             const matchingItineraryDay = suggestionsState.itinerary.find(d => d.day === day.day);
                             const matchingActivity = matchingItineraryDay?.activities.find(a => 
                               a.activity === activityInfo.title || 
@@ -569,7 +477,6 @@ function TravelResults({
                               (a.place && activityInfo.title.includes(a.place))
                             );
                             
-                            // Process booking info
                             const bookingInfo = matchingActivity?.bookingInfo || activityInfo.bookingInfo || null;
                             const isUrl = bookingInfo && (
                               bookingInfo.startsWith('http://') || 
@@ -593,7 +500,8 @@ function TravelResults({
                                   bookingInfo={!isUrl ? bookingInfo : null}
                                   mustSeeAttractions={suggestionsState.mustSeeAttractions}
                                   hiddenGems={suggestionsState.hiddenGems}
-                                  compact={true}
+                                  savedThumbnail={getActivityThumbnail(activity)}
+                                  onSaveThumbnail={(url) => saveThumbnail(activity, url)}
                                 />
                               </div>
                             );
@@ -603,7 +511,6 @@ function TravelResults({
                               const newActivities = { ...prev };
                               const dayActivities = [...prev[day.day]];
                               
-                              // Swap activities
                               const temp = dayActivities[sourceIndex];
                               dayActivities[sourceIndex] = dayActivities[targetIndex];
                               dayActivities[targetIndex] = temp;
@@ -690,21 +597,39 @@ function TravelResults({
                                 href={`https://www.tiqets.com/en/search/?q=${encodeURIComponent(item.title)}+${encodeURIComponent(suggestionsState.destination.name)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center px-4 py-1 bg-[#003049] text-white rounded-md transition-colors text-[14px] sm:text-base"
+                                className="inline-flex items-center justify-center px-4 py-1 bg-[#003049] text-white rounded-md hover:bg-[#003049]/90 transition-colors text-[14px] sm:text-base"
                               >
                                 <ExternalLink className="w-4 h-4" />
                                 <span className="hidden sm:inline ml-2">{language === 'en' ? 'Book Tickets' : 'Réserver'}</span>
                               </a>
                             )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-[14px] sm:text-base w-full sm:w-auto flex items-center justify-center"
-                              onClick={() => handleAddToItinerary(item.title, item.description)}
-                            >
-                              <Plus className="hidden sm:inline-block w-4 h-4 mr-2" />
-                              {language === 'en' ? 'Add to Itinerary' : 'Ajouter à l\'itinéraire'}
-                            </Button>
+                            <AddToItinerary
+                              title={item.title}
+                              description={item.description}
+                              destination={suggestionsState.destination.name}
+                              itineraryDays={Object.keys(itineraryActivities).map(Number)}
+                              onAddToItinerary={(dayIndex, title, description) => {
+                                const newActivity = `${title} - ${description}`;
+                                
+                                setItineraryActivities(prev => {
+                                  const newActivities = { ...prev };
+                                  const currentDayActivities = prev[dayIndex] || [];
+                                  
+                                  newActivities[dayIndex] = [...currentDayActivities, newActivity];
+                                  return newActivities;
+                                });
+                                
+                                toast({
+                                  title: language === 'fr' ? "Ajouté à l'itinéraire" : "Added to Itinerary",
+                                  description: language === 'fr' 
+                                    ? `Élément ajouté au jour ${dayIndex} de votre itinéraire` 
+                                    : `Item added to day ${dayIndex} of your itinerary`,
+                                });
+                                
+                                analytics.trackAddToItinerary(destination, title);
+                              }}
+                              language={language}
+                            />
                           </div>
                         </>
                       )}
@@ -825,6 +750,60 @@ function TravelResults({
     }
   };
 
+  const prepareItineraryMapItems = () => {
+    const items: any[] = [];
+    let globalIndex = 0;
+    
+    const sortedDays = Object.keys(itineraryActivities)
+      .map(day => parseInt(day))
+      .filter(day => !isNaN(day))
+      .sort((a, b) => a - b);
+    
+    sortedDays.forEach(day => {
+      const dayActivities = itineraryActivities[day] || [];
+      
+      dayActivities.forEach((activity, localIndex) => {
+        const activityInfo = extractActivityInfo(activity);
+        
+        let coordinates = null;
+        
+        const attraction = suggestionsState.mustSeeAttractions.find(
+          item => item.title.toLowerCase().includes(activityInfo.title.toLowerCase()) || 
+                activityInfo.title.toLowerCase().includes(item.title.toLowerCase())
+        );
+        if (attraction?.coordinates) {
+          coordinates = attraction.coordinates;
+        } else {
+          const gem = suggestionsState.hiddenGems.find(
+            item => item.title.toLowerCase().includes(activityInfo.title.toLowerCase()) || 
+                  activityInfo.title.toLowerCase().includes(item.title.toLowerCase())
+          );
+          if (gem?.coordinates) {
+            coordinates = gem.coordinates;
+          } else {
+            coordinates = suggestionsState.destination.coordinates;
+          }
+        }
+        
+        const displayIndex = globalIndex + 1;
+        
+        items.push({
+          day: parseInt(day.toString()),
+          index: localIndex,
+          displayIndex: displayIndex,
+          title: activityInfo.title,
+          description: activityInfo.description,
+          location: activityInfo.destination,
+          coordinates
+        });
+        
+        globalIndex++;
+      });
+    });
+    
+    return items;
+  };
+
   return (
     <div ref={contentRef} className="relative min-h-screen bg-white w-full">
       <div ref={resultsTitleRef} className="px-0 py-3 rounded-lg mb-4 w-full">
@@ -835,47 +814,37 @@ function TravelResults({
         </h2>
       </div>
 
-      {/* Itinerary and Places buttons */}
-      <div className="flex gap-4 mb-3 w-full">
-        <span
-          className={`text-[#003049] ${viewMode === 'itinerary' ? 'underline font-bold' : ''}`}
-          onClick={() => setViewMode('itinerary')}
-          style={{ cursor: 'pointer' }}
-          onMouseEnter={(e) => e.currentTarget.classList.add('underline')}
-          onMouseLeave={(e) => e.currentTarget.classList.remove('underline')}
-        >
-          {language === 'en' ? 'Itinerary' : 'Itinéraire'}
-        </span>
-        <span
-          className={`text-[#003049] ${viewMode === 'places' ? 'underline font-bold' : ''}`}
-          onClick={() => setViewMode('places')}
-          style={{ cursor: 'pointer' }}
-          onMouseEnter={(e) => e.currentTarget.classList.add('underline')}
-          onMouseLeave={(e) => e.currentTarget.classList.remove('underline')}
-        >
-          {language === 'en' ? 'Places' : 'Lieux'}
-        </span>
+      <div className="flex justify-between items-center mb-3">
+        <div className="flex gap-4 text-xl">
+          <span 
+            className={`text-[#003049] cursor-pointer ${viewMode === 'itinerary' ? 'text-[#d99a08]  underline font-bold' : ''}`} 
+            onClick={() => setViewMode('itinerary')}
+          >
+            {language === 'en' ? 'Itinerary' : 'Itinéraire'}
+          </span>
+          <span 
+            className={`text-[#003049] cursor-pointer ${viewMode === 'places' ? 'text-[#d99a08] underline font-bold' : ''}`} 
+            onClick={() => setViewMode('places')}
+          >
+            {language === 'en' ? 'Places' : 'Lieux'}
+          </span>
+          <span 
+            className={`text-[#003049] cursor-pointer ${viewMode === 'activities' ? 'text-[#d99a08] underline font-bold' : ''}`} 
+            onClick={() => setViewMode('activities')}
+          >
+            {language === 'en' ? 'Activities' : 'Activités'}
+          </span>
+        </div>
       </div>
 
-      {viewMode !== 'places' && (
-        <NavigationBar language={language} suggestions={suggestionsState} startDate={startDate || undefined} />
-      )}
-
-      {/* Fullscreen map */}
-      {isFullscreenMap && (
-        <DynamicMap
-          suggestions={suggestionsState}
-          fullscreen={true}
-          onClose={() => setIsFullscreenMap(false)}
-          itineraryItems={itineraryMapItems}
-        />
-      )}
-
-      {/* Conditional rendering based on map state and view mode */}
       {viewMode === 'itinerary' && !isFullscreenMap && (
         <div className={`flex flex-col lg:flex-row ${isMapExpanded ? 'lg:space-x-4' : ''} w-full max-w-full px-0`}>
-          {/* Itinerary section - takes full width when map is not expanded, or left side when map is expanded */}
           <div className={`${isMapExpanded ? 'lg:w-1/2' : 'w-full'}`}>
+            <NavigationBar 
+              language={language}
+              suggestions={suggestionsState}
+              startDate={startDate || undefined}
+            />
             <ResultSection
               id="itinerary"
               title={language === 'en' ? 'Day-by-Day Itinerary' : 'Itinéraire Jour par Jour'}
@@ -884,40 +853,63 @@ function TravelResults({
             />
           </div>
           
-          {/* Map section - only visible when expanded, takes right side */}
           {isMapExpanded && !isFullscreenMap && (
             <div className="w-full lg:w-1/2 mt-4 lg:mt-0 sticky top-4 h-[600px]">
               <DynamicMap
                 suggestions={suggestionsState}
-                itineraryItems={itineraryMapItems}
+                fullscreen={false}
+                onClose={() => setIsFullscreenMap(false)}
+                itineraryItems={prepareItineraryMapItems()}
               />
             </div>
           )}
         </div>
       )}
 
-      {/* Places view or non-itinerary view with map */}
-      {(viewMode !== 'itinerary' || (viewMode === 'itinerary' && isFullscreenMap)) && (
-        <>
-          {isMapExpanded && !isFullscreenMap && (
-            <div className="mb-4 w-full">
-              <DynamicMap
-                suggestions={suggestionsState}
-                itineraryItems={itineraryMapItems}
-              />
-            </div>
-          )}
-
-          {viewMode === 'itinerary' && (
-            <ResultSection
-              id="itinerary"
-              title={language === 'en' ? 'Day-by-Day Itinerary' : 'Itinéraire Jour par Jour'}
-              items={suggestionsState.itinerary}
-              type="itinerary"
+      {viewMode === 'activities' && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold mb-4">
+            {language === 'en' ? 'Look for activities or things to do' : 'Trouvez des attractions ou des activités à faire sur place'}
+          </h2>
+          
+          <div className="flex flex-col gap-4">
+            <ActivityIdeasInterests
+              destination={destination}
+              language={language}
+              interests={activityInterests}
+              suggestedActivities={activityResults}
+              onSaveInterests={setActivityInterests}
+              onSaveResults={setActivityResults}
+              isLoading={isActivityResultsLoading}
+              onLoadingChange={setIsActivityResultsLoading}
+              itineraryDays={Object.keys(itineraryActivities).map(Number)}
+              savedInterests={activityInterests}
+              savedResults={activityResults}
+              onAddToItinerary={(dayIndex: number, title: string, description: string) => {
+                const newActivity = `${title} - ${description}`;
+                
+                setItineraryActivities(prev => {
+                  const newActivities = { ...prev };
+                  const currentDayActivities = prev[dayIndex] || [];
+                  
+                  newActivities[dayIndex] = [...currentDayActivities, newActivity];
+                  return newActivities;
+                });
+                
+                toast({
+                  title: language === 'fr' ? "Ajouté à l'itinéraire" : "Added to Itinerary",
+                  description: language === 'fr' 
+                    ? `Élément ajouté au jour ${dayIndex} de votre itinéraire` 
+                    : `Item added to day ${dayIndex} of your itinerary`,
+                });
+                
+                analytics.trackAddToItinerary(destination, title);
+              }}
             />
-          )}
-        </>
+          </div>
+        </div>
       )}
+
       {viewMode === 'places' && (
         <>
           <ResultSection
@@ -934,6 +926,14 @@ function TravelResults({
             type="gems"
           />
         </>
+      )}
+      {isFullscreenMap && (
+        <DynamicMap
+          suggestions={suggestionsState}
+          fullscreen={true}
+          onClose={() => setIsFullscreenMap(false)}
+          itineraryItems={prepareItineraryMapItems()}
+        />
       )}
       <BottomNavBar 
         language={language}

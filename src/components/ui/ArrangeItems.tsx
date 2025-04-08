@@ -64,7 +64,7 @@ export function ArrangeItems<T>({
           onDragStart={(e) => handleDragStart(e, index)}
           onDragOver={handleDragOver}
           onDrop={(e) => handleDrop(e, index)}
-          className={`flex-1 group bg-[#669BBC]/10 border border-[#5f9585]/30 rounded-md p-2 transition-colors relative ${itemClassName}`}
+          className={`flex-1 group border border-[#5f9585]/30 rounded-md p-2 transition-colors relative ${itemClassName}`}
         >
           <div className="absolute top-2 right-2 flex items-center gap-1 opacity-100 transition-opacity z-10">
             <MoveVertical className={`w-4 h-4 text-gray-400 cursor-move ${dragHandleClassName}`} />
@@ -82,7 +82,7 @@ export function ArrangeItems<T>({
           </div>
           
           {/* Activity number badge */}
-          <div className="absolute top-2 left-2 bg-[#003049] text-white text-xs font-medium px-2 py-1 rounded-full z-10">
+          <div className="absolute top-2 left-2 text-xs font-medium px-2 py-1 rounded-full z-10 border border-[#003049]">
             {startingIndex + index + 1}
           </div>
           

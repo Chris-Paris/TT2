@@ -1,24 +1,40 @@
-import { defineConfig, Plugin } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
-import mcpFetchPlugin from './vite-mcp-plugin';
+import { Plugin } from 'vite';
 import express from 'express';
-import { Request, Response } from 'express';
 import fetch from 'node-fetch';
 
-// MCP Fetch handler function
-async function mcpFetchHandler(req: Request, res: any) {
+// Define the MCP Fetch handler directly in this file to avoid type issues
+async function mcpFetchHandler(req: any, res: any, next: any) {
+  console.log('MCP Fetch handler called:', req.path, req.method);
+  
+  if (req.path !== '/api/fetch') {
+    return next();
+  }
+
+  if (req.method === 'OPTIONS') {
+    // Handle preflight requests
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(204).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   try {
     const { url, options = {} } = req.body;
 
     if (!url) {
-      res.statusCode = 400;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'URL is required' }));
-      return;
+      return res.status(400).json({ error: 'URL is required' });
     }
 
     console.log('Fetching URL:', url);
+
+    // Add CORS headers to allow cross-origin requests
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     // Default headers to mimic a browser request
     const defaultHeaders = {
@@ -60,81 +76,37 @@ async function mcpFetchHandler(req: Request, res: any) {
     console.log('Fetch successful, status:', response.status);
 
     // Return the response with metadata
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({
+    return res.status(200).json({
       url,
       status: response.status,
       statusText: response.statusText,
       headers: Object.fromEntries(response.headers.entries()),
       data,
-    }));
+    });
   } catch (error) {
     console.error('Error in fetch API:', error);
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ 
+    return res.status(500).json({ 
       error: 'Failed to fetch the requested URL',
       details: error instanceof Error ? error.message : String(error)
-    }));
+    });
   }
 }
 
-// Create a custom middleware plugin
-function customMiddlewarePlugin(): Plugin {
+export default function mcpFetchPlugin(): Plugin {
   return {
-    name: 'custom-middleware-plugin',
+    name: 'vite-plugin-mcp-fetch',
     configureServer(server) {
-      // Add middleware for API requests
+      // Add middleware before Vite's middleware
       server.middlewares.use(express.json());
+      server.middlewares.use(mcpFetchHandler);
       
-      // Log all requests
+      // Log all routes
       server.middlewares.use((req, res, next) => {
         console.log(`Request: ${req.method} ${req.url}`);
         next();
       });
       
-      // Handle API fetch requests
-      server.middlewares.use((req: any, res: any, next: any) => {
-        if (req.url === '/api/fetch' && req.method === 'POST') {
-          console.log('Handling /api/fetch request');
-          return mcpFetchHandler(req, res);
-        }
-        
-        // Handle CORS preflight requests
-        if (req.url === '/api/fetch' && req.method === 'OPTIONS') {
-          res.setHeader('Access-Control-Allow-Origin', '*');
-          res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-          res.statusCode = 204;
-          res.end();
-          return;
-        }
-        
-        next();
-      });
-    }
+      console.log('🚀 MCP Fetch Server middleware initialized');
+    },
   };
 }
-
-export default defineConfig({
-  plugins: [
-    react(), 
-    mcpFetchPlugin(),
-    customMiddlewarePlugin()
-  ],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  optimizeDeps: {
-    include: ['pexels']
-  },
-  build: {
-    commonjsOptions: {
-      include: [/node_modules/],
-      transformMixedEsModules: true
-    }
-  }
-});

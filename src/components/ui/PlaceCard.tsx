@@ -1,10 +1,9 @@
-import { Clock, ExternalLink, Landmark } from 'lucide-react';
+import { Clock, ExternalLink, Landmark, Map } from 'lucide-react';
 import { getGoogleMapsUrl } from "@/lib/utils";
-import { Location } from '@/types';
+import { Location as LocationType } from '@/types';
 import { useState, useEffect } from 'react';
 
 const FLICKR_API_KEY = '4306b70370312d7ccde3304184179b2b';
-const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY || 'DKb0VyZUTezsiVcAQHYR8FcZ6MgD21ZhIvGY4XTGoo9evTxdWNcWrSTC';
 
 // Function to fetch a thumbnail image from Flickr
 async function fetchPlaceThumbnail(searchTerm: string, coordinates?: { lat: number; lng: number }): Promise<string | null> {
@@ -14,7 +13,6 @@ async function fetchPlaceThumbnail(searchTerm: string, coordinates?: { lat: numb
     let url = new URL('https://api.flickr.com/services/rest/');
     url.searchParams.set('method', 'flickr.photos.search');
     url.searchParams.set('api_key', FLICKR_API_KEY);
-    url.searchParams.set('text', searchTerm);
     url.searchParams.set('sort', 'relevance');
     url.searchParams.set('per_page', '5');
     url.searchParams.set('format', 'json');
@@ -23,11 +21,14 @@ async function fetchPlaceThumbnail(searchTerm: string, coordinates?: { lat: numb
     url.searchParams.set('content_type', '1');
     url.searchParams.set('media', 'photos');
 
-    // If coordinates are provided, add location-based search
+    // First try with coordinates if available
     if (coordinates) {
       url.searchParams.set('lat', String(coordinates.lat));
       url.searchParams.set('lon', String(coordinates.lng));
       url.searchParams.set('radius', '5');
+      url.searchParams.set('has_geo', '1');
+    } else {
+      url.searchParams.set('text', searchTerm);
     }
 
     const response = await fetch(url.toString());
@@ -59,61 +60,29 @@ async function fetchPlaceThumbnail(searchTerm: string, coordinates?: { lat: numb
   }
 }
 
-// Function to fetch a thumbnail image from Pexels as fallback
-async function fetchPexelsThumbnail(searchTerm: string): Promise<string | null> {
-  try {
-    if (!searchTerm) return null;
-    
-    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchTerm)}&per_page=1&orientation=landscape`;
-    
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': PEXELS_API_KEY
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (!data.photos || data.photos.length === 0) {
-      return null;
-    }
-    
-    return data.photos[0].src.large;
-  } catch (error) {
-    console.error('Error fetching Pexels thumbnail:', error);
-    return null;
-  }
-}
-
-interface Location {
-  title: string;
-  description: string;
-  location: string;
-  coordinates?: { lat: number; lng: number };
-  thumbnail?: string;
-}
-
 interface PlaceCardProps {
   title: string;
   description: string;
   location: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  imageUrl?: string;
   language: 'en' | 'fr';
   nearbyLandmarks?: string[];
   travelTime?: string | null;
   bookingUrl?: string | null;
   bookingInfo?: string | null;
-  mustSeeAttractions?: Location[];
-  hiddenGems?: Location[];
+  mustSeeAttractions?: LocationType[];
+  hiddenGems?: LocationType[];
 }
 
 export function PlaceCard({
   title,
   description,
   location,
+  imageUrl,
   language,
   nearbyLandmarks = [],
   travelTime = null,
@@ -126,24 +95,21 @@ export function PlaceCard({
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoadedPhotos, setHasLoadedPhotos] = useState(false);
 
-  // Find the coordinates if available
-  const placeData = [...(mustSeeAttractions || []), ...(hiddenGems || [])].find(place => 
-    place.title?.toLowerCase().includes(title?.toLowerCase()) || 
+  // Find if this place matches a must-see attraction or hidden gem
+  const placeData = mustSeeAttractions?.find(place => 
+    title?.toLowerCase().includes(place.title?.toLowerCase()) || 
     title?.toLowerCase().includes(place.title?.toLowerCase())
   );
   
-  const coordinates = placeData?.coordinates;
+  const coords = placeData?.coordinates;
 
   // Fetch thumbnail when component mounts or when title changes
   useEffect(() => {
     const fetchThumbnail = async () => {
-      if (hasLoadedPhotos) {
-        return;
-      }
+      if (hasLoadedPhotos) return;
 
-      setIsLoading(true);
       try {
-        // First try to find matching must-see attraction or hidden gem
+        // Check if we can find this place in the must-see attractions or hidden gems
         const matchingAttraction = mustSeeAttractions?.find(attraction => 
           attraction.title?.toLowerCase().includes(title?.toLowerCase()) || 
           title?.toLowerCase().includes(attraction.title?.toLowerCase())
@@ -154,36 +120,45 @@ export function PlaceCard({
           title?.toLowerCase().includes(gem.title?.toLowerCase())
         );
 
-        // If found in must-see or hidden gems, use their thumbnail
-        if (matchingAttraction?.thumbnail || matchingGem?.thumbnail) {
-          setThumbnail(matchingAttraction?.thumbnail || matchingGem?.thumbnail);
+        // If found in must-see or hidden gems, use their thumbnail if available
+        // Note: LocationType might not have thumbnail property, so we use type assertion
+        const attractionThumbnail = (matchingAttraction as any)?.thumbnail;
+        const gemThumbnail = (matchingGem as any)?.thumbnail;
+        
+        if (attractionThumbnail || gemThumbnail) {
+          setThumbnail(attractionThumbnail || gemThumbnail || null);
           setHasLoadedPhotos(true);
           return;
         }
 
-        // Otherwise fetch new thumbnail
-        const flickrThumbnail = await fetchPlaceThumbnail(`${title} ${location}`, coordinates);
-        if (flickrThumbnail) {
-          setThumbnail(flickrThumbnail);
-          setHasLoadedPhotos(true);
-          return;
+        // Try to fetch photo using coordinates first
+        let photoUrl = null;
+        if (coords) {
+          photoUrl = await fetchPlaceThumbnail('', coords);
         }
 
-        // Fallback to Pexels if Flickr fails
-        const pexelsThumbnail = await fetchPexelsThumbnail(`${title} ${location}`);
-        if (pexelsThumbnail) {
-          setThumbnail(pexelsThumbnail);
+        // If no photo found with coordinates, try with activity name
+        if (!photoUrl) {
+          photoUrl = await fetchPlaceThumbnail(`${title} ${location}`);
+        }
+
+        // Set the final photo URL
+        if (photoUrl) {
+          setThumbnail(photoUrl);
           setHasLoadedPhotos(true);
+        } else {
+          setThumbnail(null);
         }
       } catch (error) {
         console.error('Error loading thumbnail:', error);
+        setThumbnail(null);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchThumbnail();
-  }, [title, location, mustSeeAttractions, hiddenGems, coordinates]);
+  }, [title, location, mustSeeAttractions, hiddenGems, coords]);
 
   // Find if this place is a must-see attraction or hidden gem
   const isMustSee = mustSeeAttractions?.some(attraction => 
@@ -202,7 +177,7 @@ export function PlaceCard({
       <div className="flex flex-wrap gap-1 mb-2">
         {isMustSee && (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#003049] text-white">
-            {language === 'fr' ? 'Incontournable' : 'Must See'}
+            {language === 'fr' ? 'Top activité Google' : 'Must See on Google'}
           </span>
         )}
         {isHiddenGem && (
@@ -227,10 +202,10 @@ export function PlaceCard({
         </div>
       )}
 
-      {thumbnail && (
+      {(thumbnail || imageUrl) && (
         <div className="relative w-full mb-4">
           <img
-            src={thumbnail}
+            src={thumbnail || imageUrl}
             alt={title}
             className="w-full h-[140px] lg:h-[250px] object-cover rounded-lg"
             style={{
@@ -247,14 +222,15 @@ export function PlaceCard({
           {renderBadges()}
           <div className="flex items-center text-gray-600 text-sm">
             <a 
-              href={coordinates 
-                ? getGoogleMapsUrl({ title: location, coordinates }) 
+              href={coords 
+                ? getGoogleMapsUrl({ title: location, coordinates: coords }) 
                 : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="hover:underline"
+              className="flex items-center hover:underline gap-1"
             >
               {location}
+              <Map className="w-4 h-4 text-gray-500" />
             </a>
           </div>
         </div>
@@ -263,7 +239,9 @@ export function PlaceCard({
       <div className="lg:flex lg:space-x-4">
         <div className="lg:flex-1">
           {description && (
-            <p className="text-gray-700 text-sm mb-3">{description}</p>
+            <p className="text-gray-700 text-sm mb-3" data-component-name="PlaceCard">
+              {description}
+            </p>
           )}
           
           <div className="space-y-2 mb-3">

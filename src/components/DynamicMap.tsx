@@ -89,18 +89,19 @@ export function DynamicMap({ suggestions, fullscreen = false, onClose, itinerary
 
   // Add itinerary items if provided
   const itineraryLocations = itineraryItems
+    .filter(item => item.coordinates) // Only include items with coordinates
     .sort((a, b) => {
       // Sort by day first, then by index within the day
       const dayCompare = a.day - b.day;
       if (dayCompare !== 0) return dayCompare;
       return a.index - b.index;
     })
-    .map((item, overallIndex) => ({
-      coordinates: item.coordinates || suggestions.destination.coordinates, // Use destination coordinates as fallback
+    .map((item, index) => ({
+      coordinates: item.coordinates || suggestions.destination.coordinates,
       title: item.title,
       description: item.description,
       type: 'itinerary',
-      number: overallIndex + 1, // Use overall index + 1 to maintain sequential numbering
+      number: item.displayIndex !== undefined ? item.displayIndex : index + 1, // Use displayIndex as is if provided
       day: item.day,
       index: item.index
     })) as Point[];
@@ -189,24 +190,18 @@ export function DynamicMap({ suggestions, fullscreen = false, onClose, itinerary
             key={`${location.title}-${location.type}-${location.number}`}
             position={[location.coordinates!.lat, location.coordinates!.lng]}
             icon={createNumberedIcon(
-              location.type === 'event' ? 'E' : 
-              location.type === 'itinerary' ? location.number :
               location.number,
-              location.type === 'event' ? '#E53E3E' : // Red
-              location.type === 'itinerary' ? '#205283' : // Blue for itinerary items
-              '#780000' // Primary color for attractions and hidden gems
+              '#205283'
             )}
           >
             <Popup>
               <div className="font-semibold">
                 <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#FDF0D5] text-sm mr-2">
-                  {location.type === 'event' ? 'E' : location.number}
+                  {location.number}
                 </span>
                 {location.title}
               </div>
-              {location.day !== undefined && (
-                <div className="text-sm font-medium text-blue-600">Day {location.day}</div>
-              )}
+              <div className="text-sm font-medium text-blue-600">Day {location.day}</div>
               <div className="text-sm text-gray-600">{location.description}</div>
             </Popup>
           </Marker>
